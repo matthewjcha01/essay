@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Essay Writing</title>
+<script>
+  // ▼▼▼ 여기에 Apps Script 웹 앱 URL 을 붙여넣으세요 (따옴표 안, /exec 로 끝나는 주소) ▼▼▼
+  window.API_URL = 'PASTE_WEB_APP_URL_HERE';
+  // ▲▲▲ ─────────────────────────────────────────────────────────────── ▲▲▲
+  if (window.API_URL.indexOf('script.google.com') === -1) window.API_URL = '';
+</script>
+<style>
+  :root {
+    --ink: #1f2328; --muted: #6b7178; --line: #dfe2e6; --bg: #f5f6f8; --paper: #ffffff;
+    --accent: #1a5490; --accent-ink: #ffffff; --warn: #b26a00; --warn-bg: #fdf3e2;
+    --bad: #b3261e; --good: #1b7a3d;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+  .hidden { display: none !important; }
+  button { font: inherit; cursor: pointer; }
+
+  /* 입장 화면 */
+  #enter { max-width: 440px; margin: 48px auto; padding: 0 16px; }
+  .card { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 24px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
+  label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
+  label small { font-weight: 400; color: var(--muted); }
+  input[type=text], input[type=email], select {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
+    font: inherit; background: #fff; color: var(--ink); }
+  .primary { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 8px;
+    padding: 11px 18px; font-weight: 600; }
+  .primary:disabled { opacity: .5; cursor: default; }
+  #enterBtn { width: 100%; margin-top: 22px; }
+  .err { color: var(--bad); font-size: 13px; margin-top: 12px; min-height: 1em; }
+
+  /* 작성 화면 */
+  #top { position: sticky; top: 0; z-index: 5; background: var(--paper); border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 12px; padding: 10px 16px; flex-wrap: wrap; }
+  #top .title { font-weight: 700; }
+  #top .meta { color: var(--muted); font-size: 13px; }
+  #top .spacer { flex: 1; }
+  #saveState { font-size: 13px; color: var(--muted); }
+  #saveState.off { color: var(--warn); }
+  #saveState.bad { color: var(--bad); }
+  #deadline.soon { color: var(--bad); font-weight: 600; }
+
+  #layout { display: flex; gap: 20px; max-width: 1400px; margin: 0 auto; padding: 20px 16px 80px; align-items: flex-start; }
+  #fbPanel { flex: 0 0 38%; max-width: 520px; position: sticky; top: 70px; max-height: calc(100vh - 90px);
+    overflow: auto; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  #fbPanel h2 { font-size: 14px; margin: 0 0 10px; color: var(--accent); }
+  #fbBody p { margin: 0 0 10px; font: 14px/1.6 "Times New Roman", Times, serif; }
+  .br { font: italic 12px/1.5 Arial, sans-serif; color: #3c4043; border-radius: 3px; padding: 0 2px; }
+  .br.g { background: #e6f4ea; } .br.w { background: #fdf3e2; } .br.b { background: #fce9e7; }
+  #fbToggle { display: none; }
+
+  #paperWrap { flex: 1; min-width: 0; }
+  #tools { display: flex; gap: 6px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; }
+  .tool { width: 38px; height: 34px; border: 1px solid var(--line); background: var(--paper); border-radius: 6px;
+    font-family: "Times New Roman", serif; font-size: 17px; color: var(--ink); }
+  .tool.on { background: #e8eef6; border-color: #9fb6d3; }
+  #notice { font-size: 12px; color: var(--muted); margin-left: 8px; }
+  #paper { background: var(--paper); border: 1px solid var(--line); border-radius: 4px;
+    padding: 48px 56px; min-height: 70vh; font: 17px/2 "Times New Roman", Times, serif; color: #000; }
+  #mla div { line-height: 2; color: #555; }
+  #promptIn { display: block; width: 100%; border: 1px dashed var(--line); border-radius: 4px; resize: vertical;
+    font: bold 17px/1.6 "Times New Roman", Times, serif; padding: 6px 8px; margin: 8px 0 4px; color: #000;
+    background: #fbfbfc; min-height: 2.4em; }
+  #promptIn::placeholder { color: #aaa; font-weight: normal; }
+  #promptHint { font: 12px/1.4 -apple-system, "Segoe UI", sans-serif; color: var(--muted); margin: 0 0 6px; }
+  #titleIn { display: block; width: 100%; text-align: center; border: 0; border-bottom: 1px dashed transparent;
+    font: 17px/2 "Times New Roman", Times, serif; padding: 0; margin: 0; color: #000; background: transparent; }
+  #titleIn:focus { outline: none; border-bottom-color: var(--line); }
+  #titleIn::placeholder { color: #aaa; }
+  #editor { outline: none; min-height: 50vh; white-space: pre-wrap; word-wrap: break-word; }
+  #editor p, #editor div { margin: 0; text-indent: 0.5in; }
+  #editor:empty:before { content: attr(data-ph); color: #aaa; }
+  #editor.locked { opacity: .6; }
+
+  #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #2b2f33;
+    color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity .2s;
+    pointer-events: none; z-index: 20; max-width: 90vw; text-align: center; }
+  #toast.show { opacity: .95; }
+
+  /* 결과 화면 */
+  #doneView { max-width: 480px; margin: 64px auto; padding: 0 16px; text-align: center; }
+  #doneView .big { font-size: 20px; font-weight: 700; margin: 8px 0; }
+  #doneView a { color: var(--accent); word-break: break-all; }
+  #doneFb p { margin: 0 0 12px; font: 16px/1.7 "Times New Roman", Times, serif; }
+  #doneFb { -webkit-user-select: none; user-select: none; }
+
+  /* 확인 창 */
+  #modal { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: center;
+    justify-content: center; z-index: 30; padding: 16px; }
+  #modal .card { max-width: 400px; width: 100%; }
+  #modal .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
+  .ghost { background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 10px 16px; color: var(--ink); }
+
+  @media (max-width: 860px) {
+    #layout { flex-direction: column; }
+    #fbPanel { position: static; max-width: none; width: 100%; max-height: none; flex: none; }
+    #fbPanel.collapsed #fbBody { display: none; }
+    #fbToggle { display: inline-block; float: right; font-size: 12px; background: none; border: 0; color: var(--accent); }
+    #paper { padding: 28px 20px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- entry -->
+<div id="enter">
+  <div class="card">
+    <h1>Essay Writing</h1>
+    <p class="sub">Enter your name and email (or a 4-digit code), then choose your assignment.</p>
+    <label>Name <small>(the English name you use in your MLA heading)</small></label>
+    <input id="inName" type="text" autocomplete="name" placeholder="Sol Yoon Lee">
+    <label>Email <small>(leave blank if you don't have one)</small></label>
+    <input id="inEmail" type="email" autocomplete="email" autocapitalize="off" placeholder="name@gmail.com">
+    <div id="pinBox">
+      <label>No email? Make a 4-digit code <small>(use the same code every time)</small></label>
+      <input id="inPin" type="text" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="1234">
+    </div>
+    <label>Class</label>
+    <select id="inClass"><option value="">Loading…</option></select>
+    <label>Book</label>
+    <select id="inBook"><option value="">Loading…</option></select>
+    <div style="display:flex;gap:12px">
+      <div style="flex:1" id="stageBox"><label>Lesson</label><select id="inStage"></select></div>
+      <div style="flex:1"><label>Draft</label><select id="inDraft"></select></div>
+    </div>
+    <div id="taskPreview" class="sub" style="margin:12px 0 0;text-align:center"></div>
+    <button id="enterBtn" class="primary" disabled>Start</button>
+    <div id="enterErr" class="err"></div>
+  </div>
+</div>
+
+<!-- writer -->
+<div id="writer" class="hidden">
+  <div id="top">
+    <span class="title" id="wTask"></span>
+    <span class="meta" id="deadline"></span>
+    <span class="spacer"></span>
+    <span class="meta" id="wc">0 words</span>
+    <span id="saveState">—</span>
+    <button id="finishBtn" class="primary">Finish</button>
+  </div>
+  <div id="layout">
+    <aside id="fbPanel" class="hidden">
+      <button id="fbToggle">Hide</button>
+      <h2>Feedback on your last draft</h2>
+      <div id="fbBody"></div>
+    </aside>
+    <div id="paperWrap">
+      <div id="tools">
+        <button class="tool" data-cmd="bold" title="Bold (Ctrl/⌘+B)"><b>B</b></button>
+        <button class="tool" data-cmd="italic" title="Italic (Ctrl/⌘+I)"><i>I</i></button>
+        <button class="tool" data-cmd="underline" title="Underline (Ctrl/⌘+U)"><u>U</u></button>
+        <span id="notice">Pasting is turned off on this page, and your writing process is recorded.</span>
+      </div>
+      <div id="paper">
+        <div id="mla"></div>
+        <textarea id="promptIn" rows="2" maxlength="400" placeholder="Essay prompt (the question you are answering)"
+                  data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false"></textarea>
+        <div id="promptHint">You may paste the prompt here. Pasting is turned off in the title and essay.</div>
+        <input id="titleIn" type="text" placeholder="Title (optional)" autocomplete="off"
+               data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false">
+        <div id="editor" contenteditable="true" data-ph="Start writing here…"
+             data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false"
+             data-lt-active="false"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- done -->
+<div id="doneView" class="hidden">
+  <div class="card">
+    <div id="doneIcon" style="font-size:36px">✓</div>
+    <div class="big" id="doneTitle"></div>
+    <p id="doneMsg"></p>
+    <p><a id="doneLink" class="hidden" href="#" target="_blank" rel="noopener">Open as a Google Doc</a></p>
+  </div>
+  <div id="doneFb" class="card hidden" style="margin-top:16px;text-align:left"></div>
+</div>
+
+<div id="modal" class="hidden">
+  <div class="card">
+    <div style="font-weight:700;font-size:17px">Submit your essay?</div>
+    <p id="modalMsg" style="color:var(--muted);margin:8px 0 0">You cannot make changes after you submit.</p>
+    <div class="row">
+      <button class="ghost" id="modalNo">Keep writing</button>
+      <button class="primary" id="modalYes">Submit</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var LS = {
+    get: function (k) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } },
+    set: function (k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+    del: function (k) { try { localStorage.removeItem(k); } catch (e) {} }
+  };
+  function toast(msg, ms) {
+    var t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toast._t); toast._t = setTimeout(function () { t.classList.remove('show'); }, ms || 2600);
+  }
+  // 서버 호출 — Apps Script 안에서 열리면 google.script.run, 외부 주소(GitHub 등)에
+  // 올려 두면 window.API_URL 로 직접 요청한다 (구글 계정과 무관하게 작동).
+  function call(fn, args, ok, fail) {
+    if (window.API_URL) {
+      fetch(window.API_URL, { method: 'POST', body: JSON.stringify({ fn: fn, args: args }) })
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+        .then(function (t) { var x = JSON.parse(t); if (x && x.__error) throw new Error(x.__error); ok(typeof x === 'string' ? JSON.parse(x) : x); })
+        .catch(function (e) { if (fail) fail(e); });
+      return;
+    }
+    if (typeof google === 'undefined' || !google.script) { if (fail) fail(new Error('API_URL not set')); return; }
+    var r = google.script.run
+      .withSuccessHandler(function (res) { ok(typeof res === 'string' ? JSON.parse(res) : res); })
+      .withFailureHandler(function (e) { if (fail) fail(e); });
+    r[fn].apply(r, args);
+  }
+  function show(id) { ['enter', 'writer', 'doneView'].forEach(function (x) { $(x).classList.toggle('hidden', x !== id); }); }
+
+  // ═══════════ 입장 ═══════════
+  var LIST = null;
+  var saved = LS.get('mg_who') || {};
+  $('inName').value = saved.name || '';
+  $('inEmail').value = saved.email || '';
+  $('inPin').value = saved.pin || '';
+
+  function opts(sel, ph, items, keep) {
+    sel.innerHTML = '<option value="">' + ph + '</option>' + items.map(function (x) {
+      return '<option>' + esc(x) + '</option>';
+    }).join('');
+    if (keep && items.map(String).indexOf(String(keep)) !== -1) sel.value = keep;
+  }
+  function range(n) { var a = []; for (var i = 1; i <= n; i++) a.push(i); return a; }
+
+  call('webList', [], function (d) {
+    LIST = d;
+    opts($('inClass'), 'Choose class', d.반, saved.cls);
+    opts($('inBook'), 'Choose book', d.책, saved.book);
+    opts($('inStage'), 'Choose', range(d.수업최대), saved.stage);
+    opts($('inDraft'), 'Choose', range(d.초고최대), '');
+    check();
+  }, function () { $('enterErr').textContent = 'Could not load the lists. Please refresh the page.'; });
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function hasStage() { return !!(LIST && LIST.단계책.indexOf($('inBook').value) !== -1); }
+  function check() {
+    var st = hasStage();
+    $('stageBox').classList.toggle('hidden', !!$('inBook').value && !st);
+    var stageOk = !st || $('inStage').value;
+    var hasMail = !!$('inEmail').value.trim();
+    $('pinBox').classList.toggle('hidden', hasMail);
+    var idOk = hasMail || /^\d{4}$/.test($('inPin').value.trim());
+    var ok = $('inName').value.trim() && idOk && $('inClass').value &&
+             $('inBook').value && stageOk && $('inDraft').value;
+    $('enterBtn').disabled = !ok;
+    $('taskPreview').textContent = ($('inBook').value && stageOk && $('inDraft').value)
+      ? 'Assignment: ' + $('inBook').value + (st ? ' ' + $('inStage').value + '-' + $('inDraft').value
+                                             : ' draft ' + $('inDraft').value) : '';
+  }
+  ['inName', 'inEmail', 'inPin', 'inClass', 'inBook', 'inStage', 'inDraft'].forEach(function (id) {
+    $(id).oninput = check; $(id).onchange = check;
+  });
+
+  $('enterBtn').onclick = function () {
+    var who = { name: $('inName').value.trim(), email: $('inEmail').value.trim(), pin: $('inPin').value.trim(), cls: $('inClass').value,
+                book: $('inBook').value, stage: $('inStage').value };
+    LS.set('mg_who', who);
+    $('enterBtn').disabled = true; $('enterErr').textContent = '';
+    call('webEnter', [JSON.stringify({ name: who.name, email: who.email, pin: who.email ? '' : who.pin, cls: who.cls,
+                                          book: who.book, stage: hasStage() ? who.stage : '', draft: $('inDraft').value })], function (d) {
+      $('enterBtn').disabled = false;
+      if (d.err) { $('enterErr').textContent = d.err; return; }
+      if (d.closed) { $('enterErr').textContent = d.과제 + ' is closed.'; return; }
+      if (d.done) { showDone(d); return; }
+      startWriter(d);
+    }, function (e) { $('enterBtn').disabled = false; $('enterErr').textContent = 'Connection error. Please try again.'; });
+  };
+
+  function showDone(d) {
+    show('doneView');
+    $('doneTitle').textContent = d.과제;
+    var link = $('doneLink'); link.classList.add('hidden');
+    if (d.공개) {
+      $('doneIcon').textContent = '✉';
+      $('doneMsg').textContent = 'Your feedback is ready. Read it below.';
+      link.href = d.url; link.classList.remove('hidden');
+      if (d.피드백 && d.피드백.length) {
+        $('doneFb').innerHTML = d.피드백.map(fbPara).join('');
+        $('doneFb').classList.remove('hidden');
+        $('doneView').style.maxWidth = '820px';
+      }
+    } else if (d.상태 === '마감') {
+      $('doneIcon').textContent = '⏱';
+      $('doneMsg').textContent = 'The deadline has passed. Please talk to your teacher.';
+    } else {
+      $('doneIcon').textContent = '✓';
+      $('doneMsg').textContent = 'Submitted! When your feedback is ready, come back to this page and enter the same details to read it.';
+    }
+  }
+
+  // ═══════════ 작성 ═══════════
+  var S = null;               // 서버에서 받은 정보
+  var ed = $('editor');
+  var CID = Math.random().toString(36).slice(2, 10);
+  var base = '';              // 마지막으로 서버와 맞춘 저장표식
+  var dirty = false, saving = false, locked = false, finishing = false, ver = 0;
+  var log = { min: {}, ev: [] };
+  var lastLen = 0, insTotal = 0;
+  var awayStart = null, retWatch = null;
+  var clockOffset = 0;
+  var LSKEY = '';
+
+  function nowSec() { return Math.floor(Date.now() / 1000); }
+  function ev(a) { if (log.ev.length < 1500) log.ev.push(a); }
+  function minBucket() {
+    var m = String(Math.floor(Date.now() / 60000));
+    if (!log.min[m]) log.min[m] = [0, 0];
+    return log.min[m];
+  }
+
+  function startWriter(d) {
+    S = d;
+    LSKEY = 'mg_draft_' + d.id;
+    base = d.stamp || '';
+    clockOffset = d.지금 - Date.now();
+    show('writer');
+    $('wTask').textContent = d.과제;
+    $('mla').innerHTML = [d.이름, d.교사, d.반, '(date — added on submit)'].map(function (s, i) {
+      return '<div' + (i === 3 ? ' style="color:#aaa;font-style:italic"' : '') + '>' + esc(s) + '</div>';
+    }).join('');
+
+    // 맞춤법 표시
+    var sc = !!d.맞춤법;
+    ed.spellcheck = sc; $('titleIn').spellcheck = sc; $('promptIn').spellcheck = sc;
+    ['autocorrect', 'autocomplete'].forEach(function (a) {
+      ed.setAttribute(a, sc ? 'on' : 'off'); $('titleIn').setAttribute(a, sc ? 'on' : 'off');
+    });
+
+    // 서버 초안 vs 기기에 남은 미저장본 — 같은 저장 기준에서 시작한 미저장본이면 그걸 쓴다
+    var draft = d.초안 || {};
+    var local = LS.get(LSKEY);
+    if (local && local.base === base && local.dirty) { draft = local.data; dirty = true; snapQ = local.q || []; }
+    log = draft.log && draft.log.min ? draft.log : { min: {}, ev: [] };
+    if (!log.ev) log.ev = [];
+    render(draft);
+    lastLen = textLen();
+    ev([nowSec(), 'load']);
+
+    // 지난 첨삭
+    if (d.피드백) {
+      $('fbPanel').classList.remove('hidden');
+      if (d.피드백.대기) $('fbBody').innerHTML = '<p style="font-family:inherit;color:var(--muted)">Feedback on your last draft is not ready yet.</p>';
+      else $('fbBody').innerHTML = d.피드백.문단.map(fbPara).join('');
+    }
+    if (draft.불러옴 && !local) toast('Your last draft has been loaded. Revise it using the feedback.', 4000);
+
+    updateWC(); tickDeadline();
+    setInterval(tickDeadline, 20000);
+    setInterval(function () { if (dirty) save(); }, 60000);
+    setInterval(takeSnap, 30000);
+    setState(dirty ? 'Not saved' : 'Saved', '');
+    ed.focus();
+  }
+
+  function fbPara(t) {
+    if (t === '———') return '<hr style="border:0;border-top:1px solid #ddd;margin:14px 0">';
+    var h = esc(t).replace(/\[[^\]]*\]/g, function (m) {
+      var c = m.indexOf('✅') !== -1 ? 'g' : m.indexOf('❌') !== -1 ? 'b' : m.indexOf('⚠') !== -1 ? 'w' : '';
+      return '<span class="br ' + c + '">' + m + '</span>';
+    });
+    return '<p>' + h + '</p>';
+  }
+
+  // ── 문서 ↔ 데이터 ──
+  function render(d) {
+    $('titleIn').value = d.title || '';
+    $('promptIn').value = d.prompt || '';
+    var blocks = d.blocks || [];
+    if (!blocks.length) { ed.innerHTML = '<p><br></p>'; return; }
+    ed.innerHTML = blocks.map(function (b) {
+      var inner = (b.runs || []).map(function (r) {
+        var h = esc(r.t);
+        if (r.u) h = '<u>' + h + '</u>';
+        if (r.i) h = '<i>' + h + '</i>';
+        if (r.b) h = '<b>' + h + '</b>';
+        return h;
+      }).join('');
+      return '<p>' + (inner || '<br>') + '</p>';
+    }).join('');
+  }
+
+  function serialize() {
+    var blocks = [], cur = null;
+    function nb() { cur = { runs: [] }; blocks.push(cur); }
+    function walk(n, st) {
+      if (n.nodeType === 3) {
+        if (!cur) nb();
+        var t = n.data.replace(/ /g, ' ').replace(/\n/g, ' ');
+        if (!t) return;
+        var last = cur.runs[cur.runs.length - 1];
+        if (last && last.b === st.b && last.i === st.i && last.u === st.u) last.t += t;
+        else cur.runs.push({ t: t, b: st.b, i: st.i, u: st.u });
+        return;
+      }
+      if (n.nodeType !== 1) return;
+      var tag = n.tagName;
+      if (tag === 'BR') { cur = null; return; }
+      var block = /^(P|DIV|LI|H[1-6]|BLOCKQUOTE)$/.test(tag);
+      if (block) cur = null;
+      var cs = n.style || {};
+      var s2 = {
+        b: st.b || tag === 'B' || tag === 'STRONG' || cs.fontWeight === 'bold' || parseInt(cs.fontWeight, 10) >= 600 ? 1 : 0,
+        i: st.i || tag === 'I' || tag === 'EM' || cs.fontStyle === 'italic' ? 1 : 0,
+        u: st.u || tag === 'U' || (cs.textDecoration || '').indexOf('underline') !== -1 ||
+           (cs.textDecorationLine || '').indexOf('underline') !== -1 ? 1 : 0
+      };
+      for (var c = n.firstChild; c; c = c.nextSibling) walk(c, s2);
+      if (block) cur = null;
+    }
+    for (var c = ed.firstChild; c; c = c.nextSibling) walk(c, { b: 0, i: 0, u: 0 });
+    blocks = blocks.filter(function (b) {
+      return b.runs.map(function (r) { return r.t; }).join('').trim().length > 0;
+    });
+    return { prompt: $('promptIn').value.replace(/\s+/g, ' ').trim(), title: $('titleIn').value, blocks: blocks, log: log };
+  }
+
+  function textLen() { return (ed.innerText || ed.textContent || '').replace(/\s+/g, ' ').length + $('titleIn').value.length; }
+  function updateWC() {
+    var m = ((ed.innerText || ed.textContent || '').trim().match(/\S+/g) || []).length;
+    $('wc').textContent = m + ' words';
+  }
+
+  // ── 붙여넣기·끌어넣기·잘라내기 막기 ──
+  function blocked(e, kind) {
+    e.preventDefault();
+    if (kind === 'paste') { ev([nowSec(), 'paste']); markDirty(); }
+    toast(kind === 'cut' ? 'Cutting is turned off. Delete and retype instead.'
+                         : 'Pasting is turned off. Please type it yourself.');
+  }
+  [ed, $('titleIn')].forEach(function (el) {
+    el.addEventListener('paste', function (e) { blocked(e, 'paste'); });
+    el.addEventListener('drop', function (e) { blocked(e, 'paste'); });
+    el.addEventListener('cut', function (e) { blocked(e, 'cut'); });
+    el.addEventListener('beforeinput', function (e) {
+      var t = e.inputType || '';
+      if (/^insertFrom(Paste|Drop|Yank|PasteAsQuotation)$/.test(t)) return blocked(e, 'paste');
+      if (t === 'insertText' && e.data && /[\u1100-\u11FF\u3130-\u318F\uAC00-\uD7AF]/.test(e.data)) {
+        e.preventDefault(); koWarn(); return;
+      }
+      if (t === 'deleteByCut') return blocked(e, 'cut');
+      if (t === 'insertReplacementText' && S && !S.맞춤법) { e.preventDefault(); return; }
+      if (locked) e.preventDefault();
+    });
+  });
+  document.addEventListener('dragover', function (e) { e.preventDefault(); });
+
+  // ── 입력 기록 ──
+  // ── English only: 한글은 입력되는 즉시 지운다 ──
+  var KO = /[\u1100-\u11FF\u3130-\u318F\uAC00-\uD7AF]/g;
+  var composing = false, lastKoWarn = 0;
+  function koWarn() {
+    var n = Date.now();
+    if (n - lastKoWarn > 3000) { toast('Please write in English.'); ev([nowSec(), 'ko']); }
+    lastKoWarn = n;
+  }
+  function stripKorean() {
+    var found = false;
+    // 제목·프롬프트 칸
+    [$('titleIn'), $('promptIn')].forEach(function (ti) {
+      KO.lastIndex = 0;
+      if (!KO.test(ti.value)) return;
+      KO.lastIndex = 0;
+      var pos = ti.selectionStart || 0, before = ti.value.slice(0, pos);
+      var cut = (before.match(KO) || []).length;
+      KO.lastIndex = 0;
+      ti.value = ti.value.replace(KO, '');
+      try { ti.setSelectionRange(pos - cut, pos - cut); } catch (e) {}
+      found = true;
+    });
+    KO.lastIndex = 0;
+    // 본문
+    var sel = window.getSelection();
+    var anchor = sel && sel.rangeCount ? sel.anchorNode : null, aoff = sel ? sel.anchorOffset : 0;
+    var w = document.createTreeWalker(ed, NodeFilter.SHOW_TEXT, null, false), n, fix = null;
+    while ((n = w.nextNode())) {
+      if (!KO.test(n.data)) { KO.lastIndex = 0; continue; }
+      KO.lastIndex = 0;
+      if (n === anchor) fix = { node: n, off: aoff - (n.data.slice(0, aoff).match(KO) || []).length };
+      KO.lastIndex = 0;
+      n.data = n.data.replace(KO, '');
+      found = true;
+    }
+    if (fix) {
+      try { var rg = document.createRange(); rg.setStart(fix.node, Math.max(0, Math.min(fix.off, fix.node.data.length)));
+            rg.collapse(true); sel.removeAllRanges(); sel.addRange(rg); } catch (e) {}
+    }
+    if (found) koWarn();
+    return found;
+  }
+  [ed, $('titleIn'), $('promptIn')].forEach(function (el) {
+    el.addEventListener('compositionstart', function () { composing = true; });
+    el.addEventListener('compositionend', function () {
+      composing = false;
+      setTimeout(function () { if (stripKorean()) { lastLen = textLen(); updateWC(); markDirty(); } }, 0);
+    });
+  });
+
+  function onInput(e) {
+    if (locked) return;
+    if (!composing && !(e && e.isComposing)) stripKorean();
+    var len = textLen(), d = len - lastLen; lastLen = len;
+    var t = (e && e.inputType) || '';
+    if (t !== 'historyUndo' && t !== 'historyRedo') {
+      var b = minBucket();
+      if (d > 0) { b[0] += d; insTotal += d; } else if (d < 0) b[1] += -d;
+      if (d >= 15) ev([nowSec(), 'jump', d]);   // 기준(25자)은 서버 설정에서 거른다
+    }
+    markDirty(); updateWC();
+  }
+  ed.addEventListener('input', onInput);
+  $('titleIn').addEventListener('input', onInput);
+  // 프롬프트 칸: 붙여넣기 허용, 타이핑 기록에는 넣지 않음 (한글만 지움)
+  $('promptIn').addEventListener('input', function (e) {
+    if (locked) return;
+    if (!composing && !(e && e.isComposing)) stripKorean();
+    markDirty();
+  });
+  $('promptIn').addEventListener('keydown', function (e) { if (e.key === 'Enter') e.preventDefault(); });
+  ed.addEventListener('keydown', function (e) {
+    // Tab 키는 들여쓰기 대신 무시 (들여쓰기는 자동)
+    if (e.key === 'Tab') e.preventDefault();
+  });
+
+  function markDirty() {
+    dirty = true; ver++;
+    setState('Not saved', '');
+    clearTimeout(markDirty._t);
+    markDirty._t = setTimeout(function () { saveLocal(true); }, 1500);
+  }
+
+  // ── 화면 이탈 기록 ──
+  function isAway() { return document.hidden || !document.hasFocus(); }
+  function goAway() { if (!S || locked || awayStart !== null) return; awayStart = Date.now(); }
+  function comeBack() {
+    if (!S || awayStart === null || isAway()) return;
+    var sec = Math.round((Date.now() - awayStart) / 1000);
+    awayStart = null;
+    if (sec < 3) return;
+    ev([nowSec(), 'away', sec]);
+    if (retWatch) finishRet();
+    retWatch = { t: nowSec(), sec: sec, base: insTotal, timer: setTimeout(finishRet, 60000) };
+    markDirty();
+  }
+  function finishRet() {
+    if (!retWatch) return;
+    clearTimeout(retWatch.timer);
+    ev([retWatch.t, 'ret', retWatch.sec, insTotal - retWatch.base]);
+    retWatch = null;
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { goAway(); if (dirty) { saveLocal(true); save(); } }
+    else comeBack();
+  });
+  window.addEventListener('blur', goAway);
+  window.addEventListener('focus', function () { setTimeout(comeBack, 50); });
+
+  // ── 온라인/오프라인 ──
+  window.addEventListener('offline', function () {
+    if (!S) return; ev([nowSec(), 'off']);
+    setState('Offline — saving on this device. Do not close this window.', 'off');
+  });
+  window.addEventListener('online', function () {
+    if (!S) return; ev([nowSec(), 'on']); markDirty(); save();
+  });
+  window.addEventListener('beforeunload', function (e) {
+    if (dirty && !locked) { saveLocal(true); e.preventDefault(); e.returnValue = ''; }
+  });
+
+  // ── 작성 과정 스냅샷 (재생용) ──
+  //   30초마다 본문이 바뀌었으면 기록. [시각, 시작위치, 지운글자수, 넣은글]
+  //   시작위치 -1 = 전체 글(키프레임): 창을 열 때마다 첫 기록과 10번째마다.
+  var snapQ = [], snapBase = null, snapN = 0;
+  function bodyText() {
+    return serialize().blocks.map(function (b) { return b.runs.map(function (x) { return x.t; }).join(''); }).join('\n');
+  }
+  function takeSnap() {
+    if (!S || locked) return;
+    var cur = bodyText();
+    if (snapBase !== null && cur === snapBase) return;
+    if (snapBase === null || snapN % 10 === 0) {
+      snapQ.push([nowSec(), -1, 0, cur]);
+    } else {
+      var a = snapBase, st = 0;
+      while (st < a.length && st < cur.length && a.charAt(st) === cur.charAt(st)) st++;
+      var ea = a.length, eb = cur.length;
+      while (ea > st && eb > st && a.charAt(ea - 1) === cur.charAt(eb - 1)) { ea--; eb--; }
+      snapQ.push([nowSec(), st, ea - st, cur.slice(st, eb)]);
+    }
+    snapBase = cur; snapN++;
+    if (snapQ.length > 400) snapQ = snapQ.slice(-400);
+  }
+  function saveLocal(isDirty, data) {
+    LS.set(LSKEY, { base: base, dirty: isDirty, data: data || serialize(), q: snapQ });
+  }
+
+  // ── 저장 ──
+  function setState(msg, cls) { var s = $('saveState'); s.textContent = msg; s.className = cls || ''; }
+  function save(cb) {
+    if (!S || locked || saving) { if (cb) cb(false); return; }
+    if (!navigator.onLine) { setState('Offline — saving on this device. Do not close this window.', 'off'); if (cb) cb(false); return; }
+    saving = true;
+    takeSnap();
+    var data = serialize();
+    var sentVer = ver;   // 저장하는 동안 더 쓴 게 있으면 dirty 유지
+    data.base = base; data.cid = CID;
+    data.snaps = snapQ.slice(); var sentN = data.snaps.length;
+    call('webSave', [S.id, JSON.stringify(data)], function (r) {
+      saving = false;
+      if (r.ok) {
+        base = r.stamp;
+        snapQ.splice(0, sentN);
+        var nowData = serialize();
+        if (ver === sentVer) dirty = false;
+        saveLocal(dirty, nowData);
+        var t = new Date(); setState('Saved ' + pad(t.getHours()) + ':' + pad(t.getMinutes()), '');
+        if (cb) cb(true);
+      } else handleReject(r, cb);
+    }, function () {
+      saving = false; setState('Save failed — will try again soon', 'bad'); if (cb) cb(false);
+    });
+  }
+  function handleReject(r, cb) {
+    if (r.conflict) {
+      lock('This essay is open in another window or device. Close this one and write in only one place.');
+    } else if (r.locked) {
+      if (r.상태 === '마감') lock('The deadline has passed. Your work can no longer be saved.');
+      else { LS.del(LSKEY); showDone({ 과제: S.과제, 상태: r.상태, 공개: false }); }
+    } else setState(r.err || 'Save failed', 'bad');
+    if (cb) cb(false);
+  }
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+  function lock(msg) {
+    locked = true; ed.contentEditable = 'false'; ed.classList.add('locked');
+    $('titleIn').disabled = true; $('promptIn').disabled = true; $('finishBtn').disabled = true;
+    setState(msg, 'bad'); toast(msg, 6000);
+  }
+
+  // ── 서식 버튼 ──
+  try { document.execCommand('defaultParagraphSeparator', false, 'p'); } catch (e) {}
+  Array.prototype.forEach.call(document.querySelectorAll('.tool'), function (b) {
+    b.addEventListener('mousedown', function (e) { e.preventDefault(); });
+    b.addEventListener('click', function () {
+      if (locked) return;
+      ed.focus(); document.execCommand(b.getAttribute('data-cmd'), false, null);
+      markDirty(); refreshTools();
+    });
+  });
+  function refreshTools() {
+    Array.prototype.forEach.call(document.querySelectorAll('.tool'), function (b) {
+      var on = false; try { on = document.queryCommandState(b.getAttribute('data-cmd')); } catch (e) {}
+      b.classList.toggle('on', on);
+    });
+  }
+  document.addEventListener('selectionchange', refreshTools);
+
+  // ── 마감 ──
+  function tickDeadline() {
+    if (!S || !S.마감) { $('deadline').textContent = ''; return; }
+    var left = S.마감 - (Date.now() + clockOffset);
+    var el = $('deadline');
+    if (left <= 0) {
+      el.textContent = 'Closed';
+      if (!locked && !finishing && left > -S.유예 * 60000 && textLen() > 0) {
+        toast('Time is up. Submitting automatically.', 5000);
+        doFinish(true);
+      }
+      return;
+    }
+    var m = Math.floor(left / 60000), h = Math.floor(m / 60), dd = Math.floor(h / 24);
+    el.textContent = 'Due in ' + (dd >= 1 ? dd + 'd ' + (h % 24) + 'h' : h >= 1 ? h + 'h ' + (m % 60) + 'm' : m + 'm');
+    el.classList.toggle('soon', left < 3600000);
+  }
+
+  // ── Finish ──
+  $('finishBtn').onclick = function () {
+    var words = ((ed.innerText || ed.textContent || '').trim().match(/\S+/g) || []).length;
+    if (!words) { toast('Your essay is empty.'); return; }
+    $('modalMsg').textContent = words + ' words. You cannot make changes after you submit.' +
+      ($('promptIn').value.trim() ? '' : ' (Your prompt is empty.)');
+    $('modal').classList.remove('hidden');
+  };
+  $('modalNo').onclick = function () { $('modal').classList.add('hidden'); ed.focus(); };
+  $('modalYes').onclick = function () { $('modal').classList.add('hidden'); doFinish(false); };
+
+  function doFinish(auto) {
+    if (finishing) return;
+    if (!navigator.onLine) { toast('Connect to the internet and press Finish again. Your essay is still here.', 5000); return; }
+    finishing = true;
+    finishRet();
+    awayStart = null;
+    $('finishBtn').disabled = true; setState('Submitting…', '');
+    takeSnap();
+    var data = serialize(); data.base = base; data.cid = CID; data.auto = auto; data.snaps = snapQ.slice();
+    call('webFinish', [S.id, JSON.stringify(data)], function (r) {
+      finishing = false;
+      if (r.ok) {
+        locked = true; LS.del(LSKEY); dirty = false;
+        showDone({ 과제: S.과제, 상태: r.상태, 공개: false });
+      } else {
+        $('finishBtn').disabled = false;
+        if (r.err) { setState(r.err, 'bad'); toast(r.err); }
+        else handleReject(r);
+      }
+    }, function () {
+      finishing = false; $('finishBtn').disabled = false;
+      setState('Submit failed — please try again', 'bad'); toast('Could not submit. Please press Finish again.');
+    });
+  }
+})();
+</script>
+</body>
+</html>

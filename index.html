@@ -1,15 +1,11 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="utf-8">
+<script>window.API_URL = "https://script.google.com/macros/s/AKfycbyZVv25-zBxV0-CCebo2sy9l4cRX0QmpOkS1VW5pK2IYeSWTReGFhfjVoPgspVn-uhv-g/exec";</script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Essay Writing</title>
-<script>
-  // ▼▼▼ 여기에 Apps Script 웹 앱 URL 을 붙여넣으세요 (따옴표 안, /exec 로 끝나는 주소) ▼▼▼
-  window.API_URL = 'https://script.google.com/macros/s/AKfycbyZVv25-zBxV0-CCebo2sy9l4cRX0QmpOkS1VW5pK2IYeSWTReGFhfjVoPgspVn-uhv-g/exec';
-  // ▲▲▲ ─────────────────────────────────────────────────────────────── ▲▲▲
-  if (window.API_URL.indexOf('script.google.com') === -1) window.API_URL = '';
-</script>
+<base target="_top">
+<meta charset="utf-8">
 <style>
   :root {
     --ink: #1f2328; --muted: #6b7178; --line: #dfe2e6; --bg: #f5f6f8; --paper: #ffffff;
@@ -35,6 +31,15 @@
   .primary { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 8px;
     padding: 11px 18px; font-weight: 600; }
   .primary:disabled { opacity: .5; cursor: default; }
+  input[type=password] { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
+    font: inherit; background: #fff; color: var(--ink); }
+  #loginBtn { width: 100%; margin-top: 22px; }
+  .hello { display: flex; justify-content: space-between; align-items: baseline; margin: 0 0 6px; }
+  .hello b { font-size: 16px; }
+  .linkbtn { background: none; border: 0; color: var(--accent); font-size: 13px; padding: 0; }
+  .payNote { word-break: keep-all; background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 10px 12px;
+    font-size: 13px; margin: 8px 0 4px; }
+  .blockedBox { word-break: keep-all; background: #fce8e6; color: var(--bad); border-radius: 8px; padding: 12px; font-size: 14px; margin-top: 14px; }
   #enterBtn { width: 100%; margin-top: 22px; }
   .err { color: var(--bad); font-size: 13px; margin-top: 12px; min-height: 1em; }
 
@@ -90,8 +95,6 @@
   #doneView { max-width: 480px; margin: 64px auto; padding: 0 16px; text-align: center; }
   #doneView .big { font-size: 20px; font-weight: 700; margin: 8px 0; }
   #doneView a { color: var(--accent); word-break: break-all; }
-  #doneFb p { margin: 0 0 12px; font: 16px/1.7 "Times New Roman", Times, serif; }
-  #doneFb { -webkit-user-select: none; user-select: none; }
 
   /* 확인 창 */
   #modal { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: center;
@@ -115,14 +118,59 @@
 <div id="enter">
   <div class="card">
     <h1>Essay Writing</h1>
-    <p class="sub">Enter your name and email (or a 4-digit code), then choose your assignment.</p>
+
+    <!-- login -->
+    <div id="loginBox" class="hidden">
+      <p class="sub">Log in with your email and password.</p>
+      <label>Email</label>
+      <input id="lgEmail" type="email" autocomplete="username" autocapitalize="off" placeholder="name@gmail.com">
+      <label>Password</label>
+      <input id="lgPw" type="password" autocomplete="current-password">
+      <button id="loginBtn" class="primary">Log in</button>
+      <div id="loginErr" class="err"></div>
+      <p style="text-align:center;margin:18px 0 0;font-size:14px">First time here? <button class="linkbtn" style="font-size:14px" id="toSignup">Create your account</button></p>
+    </div>
+
+    <!-- sign up -->
+    <div id="signupBox" class="hidden">
+      <p class="sub">Create your account. Your teacher will approve it.</p>
+      <label>Name <small>(the English name you use in your MLA heading)</small></label>
+      <input id="suName" type="text" autocomplete="name" placeholder="Sol Yoon Lee">
+      <label>Email <small>(the email you will always use)</small></label>
+      <input id="suEmail" type="email" autocomplete="username" autocapitalize="off" placeholder="name@gmail.com">
+      <label>Class</label>
+      <select id="suClass"><option value="">Loading…</option></select>
+      <label>Password <small>(4+ characters)</small></label>
+      <input id="suPw" type="password" autocomplete="new-password">
+      <label>Password again</label>
+      <input id="suPw2" type="password" autocomplete="new-password">
+      <button id="signupBtn" class="primary" style="width:100%;margin-top:22px">Create account</button>
+      <div id="signupErr" class="err"></div>
+      <p style="text-align:center;margin:18px 0 0;font-size:14px">Already have an account? <button class="linkbtn" style="font-size:14px" id="toLogin">Log in</button></p>
+    </div>
+
+    <div id="chooseBox" class="hidden">
+    <div id="helloBox" class="hidden">
+      <div class="hello"><b id="helloName"></b><span><button class="linkbtn" id="pwBtn">Change password</button> · <button class="linkbtn" id="logoutBtn">Log out</button></span></div>
+      <div id="weakNote" class="payNote hidden">Please change your password to your own. <button class="linkbtn" id="weakBtn">Change now</button></div>
+      <div id="pwBox" class="hidden" style="border:1px solid var(--line);border-radius:8px;padding:4px 14px 14px;margin:8px 0">
+        <label>Current password</label><input id="pwOld" type="password" autocomplete="current-password">
+        <label>New password <small>(4+ characters)</small></label><input id="pwNew" type="password" autocomplete="new-password">
+        <label>New password again</label><input id="pwNew2" type="password" autocomplete="new-password">
+        <div style="display:flex;gap:8px;margin-top:14px">
+          <button class="primary" id="pwSave" style="flex:1">Save</button>
+          <button class="ghost" id="pwCancel" style="flex:1;border:1px solid var(--line);background:#fff;border-radius:8px">Cancel</button>
+        </div>
+        <div id="pwErr" class="err"></div>
+      </div>
+      <div id="payNote" class="payNote hidden"></div>
+    </div>
+    <div id="whoBox">
+    <p class="sub">Enter your name and email, then choose your assignment.</p>
     <label>Name <small>(the English name you use in your MLA heading)</small></label>
     <input id="inName" type="text" autocomplete="name" placeholder="Sol Yoon Lee">
-    <label>Email <small>(leave blank if you don't have one)</small></label>
+    <label>Email <small>(Gmail)</small></label>
     <input id="inEmail" type="email" autocomplete="email" autocapitalize="off" placeholder="name@gmail.com">
-    <div id="pinBox">
-      <label>No email? Make a 4-digit code <small>(use the same code every time)</small></label>
-      <input id="inPin" type="text" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="1234">
     </div>
     <label>Class</label>
     <select id="inClass"><option value="">Loading…</option></select>
@@ -135,6 +183,19 @@
     <div id="taskPreview" class="sub" style="margin:12px 0 0;text-align:center"></div>
     <button id="enterBtn" class="primary" disabled>Start</button>
     <div id="enterErr" class="err"></div>
+    </div>
+    <div id="loadingBox" class="sub" style="text-align:center;margin:16px 0">Loading…</div>
+  </div>
+</div>
+
+<!-- relogin (session ended while writing) -->
+<div id="relogin" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:50;display:flex;align-items:center;justify-content:center">
+  <div class="card" style="max-width:380px;width:90%">
+    <h1 style="font-size:17px">Please log in again</h1>
+    <p class="sub" style="margin-bottom:8px">Your writing is safe on this device. Enter your password to keep going.</p>
+    <input id="rlPw" type="password" autocomplete="current-password">
+    <button id="rlBtn" class="primary" style="width:100%;margin-top:14px">Continue</button>
+    <div id="rlErr" class="err"></div>
   </div>
 </div>
 
@@ -182,9 +243,8 @@
     <div id="doneIcon" style="font-size:36px">✓</div>
     <div class="big" id="doneTitle"></div>
     <p id="doneMsg"></p>
-    <p><a id="doneLink" class="hidden" href="#" target="_blank" rel="noopener">Open as a Google Doc</a></p>
+    <p><a id="doneLink" class="hidden" href="#" target="_blank" rel="noopener">View feedback</a></p>
   </div>
-  <div id="doneFb" class="card hidden" style="margin-top:16px;text-align:left"></div>
 </div>
 
 <div id="modal" class="hidden">
@@ -231,12 +291,152 @@
   }
   function show(id) { ['enter', 'writer', 'doneView'].forEach(function (x) { $(x).classList.toggle('hidden', x !== id); }); }
 
+  // ═══════════ 로그인 ═══════════
+  var MODE = null;            // { login: true/false }
+  var ME = null;              // 로그인한 학생 { token, 이름, 이메일, 반 }
+  var TOKEN = LS.get('mg_token') || '';
+  function setToken(t) { TOKEN = t || ''; if (t) LS.set('mg_token', t); else LS.del('mg_token'); }
+
+  function showLogin(msg, blocked, wait) {
+    $('loadingBox').classList.add('hidden');
+    $('chooseBox').classList.add('hidden');
+    $('signupBox').classList.add('hidden');
+    $('loginBox').classList.remove('hidden');
+    $('lgEmail').value = $('lgEmail').value || (LS.get('mg_who') || {}).email || '';
+    var e = $('loginErr'); e.textContent = msg || ''; e.className = wait ? 'payNote' : blocked ? 'blockedBox' : 'err';
+    if (!msg) e.className = 'err';
+  }
+  function showChoose() {
+    $('loadingBox').classList.add('hidden');
+    $('loginBox').classList.add('hidden');
+    $('signupBox').classList.add('hidden');
+    $('chooseBox').classList.remove('hidden');
+    if (MODE.login) {
+      $('whoBox').classList.add('hidden');
+      $('helloBox').classList.remove('hidden');
+      $('helloName').textContent = 'Hi, ' + ME.이름;
+      $('payNote').classList.toggle('hidden', !ME.안내);
+      $('payNote').textContent = ME.안내 || '';
+      $('weakNote').classList.toggle('hidden', !ME.약함);
+    }
+    check();
+  }
+  function loggedIn(d) {
+    ME = d; setToken(d.token);
+    var w = LS.get('mg_who') || {}; w.email = d.이메일; if (!w.cls && d.반) w.cls = d.반; LS.set('mg_who', w);
+    if (LIST && d.반 && !$('inClass').value) $('inClass').value = d.반;
+    showChoose();
+  }
+  function afterLogin(d) {
+    if (d.ok) { loggedIn(d); return; }
+    setToken('');
+    showLogin(d.relogin ? '' : (d.err || ''), !!d.blocked, !!d.대기);
+  }
+
+  $('loginBtn').onclick = function () {
+    var em = $('lgEmail').value.trim(), pw = $('lgPw').value;
+    if (!em || !pw) { $('loginErr').className = 'err'; $('loginErr').textContent = 'Please enter your email and password.'; return; }
+    $('loginBtn').disabled = true; $('loginErr').textContent = '';
+    call('webLogin', [JSON.stringify({ email: em, password: pw })], function (d) {
+      $('loginBtn').disabled = false; $('lgPw').value = '';
+      afterLogin(d);
+    }, function () { $('loginBtn').disabled = false; $('loginErr').className = 'err'; $('loginErr').textContent = 'Connection error. Please try again.'; });
+  };
+  $('lgPw').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('loginBtn').click(); });
+
+  // ── 가입 ──
+  $('toSignup').onclick = function () {
+    $('loginBox').classList.add('hidden'); $('signupBox').classList.remove('hidden');
+    $('signupErr').textContent = ''; $('signupErr').className = 'err';
+    if (!$('suEmail').value) $('suEmail').value = $('lgEmail').value.trim();
+    if (LIST && $('suClass').options.length <= 1) opts($('suClass'), 'Choose class', LIST.반, '');
+  };
+  $('toLogin').onclick = function () { showLogin(''); };
+  $('signupBtn').onclick = function () {
+    var e = $('signupErr'); e.className = 'err';
+    var nm = $('suName').value.trim(), em = $('suEmail').value.trim(), cl = $('suClass').value,
+        p1 = $('suPw').value, p2 = $('suPw2').value;
+    if (!nm || !em || !cl || !p1) { e.textContent = 'Please fill in every box.'; return; }
+    if (p1.length < 4) { e.textContent = 'Your password must be at least 4 characters.'; return; }
+    if (p1 !== p2) { e.textContent = 'The two passwords are different.'; return; }
+    $('signupBtn').disabled = true; e.textContent = '';
+    call('webSignup', [JSON.stringify({ name: nm, email: em, cls: cl, password: p1 })], function (d) {
+      $('signupBtn').disabled = false;
+      if (d.ok) { $('suPw').value = $('suPw2').value = ''; loggedIn(d); return; }
+      if (d.blocked) {
+        $('suPw').value = $('suPw2').value = '';
+        $('lgEmail').value = em;
+        showLogin(d.err, true, !!d.대기);
+        return;
+      }
+      e.textContent = d.err || 'Please try again.';
+    }, function () { $('signupBtn').disabled = false; e.textContent = 'Connection error. Please try again.'; });
+  };
+  // ── 비밀번호 바꾸기 ──
+  function openPw() { $('pwBox').classList.remove('hidden'); $('pwErr').textContent = ''; $('pwErr').className = 'err'; $('pwOld').focus(); }
+  $('pwBtn').onclick = openPw; $('weakBtn').onclick = openPw;
+  $('pwCancel').onclick = function () { $('pwBox').classList.add('hidden'); $('pwOld').value = $('pwNew').value = $('pwNew2').value = ''; };
+  $('pwSave').onclick = function () {
+    var e = $('pwErr'); e.className = 'err';
+    var o = $('pwOld').value, n1 = $('pwNew').value, n2 = $('pwNew2').value;
+    if (!o || !n1) { e.textContent = 'Please fill in every box.'; return; }
+    if (n1 !== n2) { e.textContent = 'The two new passwords are different.'; return; }
+    $('pwSave').disabled = true;
+    call('webChangePassword', [JSON.stringify({ token: TOKEN, old: o, pw: n1 })], function (d) {
+      $('pwSave').disabled = false;
+      if (d.ok) {
+        $('pwOld').value = $('pwNew').value = $('pwNew2').value = '';
+        $('pwBox').classList.add('hidden'); $('weakNote').classList.add('hidden');
+        toast('Your password has been changed.', 3500); return;
+      }
+      if (d.relogin) { setToken(''); ME = null; showLogin('Please log in again.'); return; }
+      e.textContent = d.err || 'Please try again.';
+    }, function () { $('pwSave').disabled = false; e.textContent = 'Connection error. Please try again.'; });
+  };
+
+  $('logoutBtn').onclick = function () {
+    call('webLogout', [TOKEN], function () {}, function () {});
+    setToken(''); ME = null; showLogin('');
+  };
+
+  call('webMode', [], function (m) {
+    MODE = m;
+    if (!m.login) { showChoose(); return; }
+    if (TOKEN) call('webResume', [TOKEN], afterLogin, function () { showLogin(''); });
+    else showLogin('');
+  }, function () { $('loadingBox').textContent = 'Could not connect. Please refresh the page.'; });
+
+  // 쓰는 중에 로그인이 끝났을 때
+  var reloginWait = [];
+  function needRelogin(cb) {
+    if (cb) reloginWait.push(cb);
+    saveLocal(true);
+    $('relogin').classList.remove('hidden'); $('rlErr').textContent = ''; $('rlPw').focus();
+  }
+  $('rlBtn').onclick = function () {
+    var pw = $('rlPw').value; if (!pw) return;
+    $('rlBtn').disabled = true;
+    call('webLogin', [JSON.stringify({ email: ME ? ME.이메일 : (LS.get('mg_who') || {}).email, password: pw })], function (d) {
+      $('rlBtn').disabled = false; $('rlPw').value = '';
+      if (d.ok) {
+        ME = d; setToken(d.token);
+        $('relogin').classList.add('hidden');
+        var w = reloginWait; reloginWait = [];
+        w.forEach(function (f) { f(); });
+        if (dirty) save();
+      } else if (d.blocked) {
+        $('relogin').classList.add('hidden');
+        lock(d.err);
+      } else $('rlErr').textContent = d.err || 'Please try again.';
+    }, function () { $('rlBtn').disabled = false; $('rlErr').textContent = 'Connection error. Please try again.'; });
+  };
+  $('rlPw').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('rlBtn').click(); });
+
   // ═══════════ 입장 ═══════════
   var LIST = null;
   var saved = LS.get('mg_who') || {};
   $('inName').value = saved.name || '';
   $('inEmail').value = saved.email || '';
-  $('inPin').value = saved.pin || '';
 
   function opts(sel, ph, items, keep) {
     sel.innerHTML = '<option value="">' + ph + '</option>' + items.map(function (x) {
@@ -246,14 +446,26 @@
   }
   function range(n) { var a = []; for (var i = 1; i <= n; i++) a.push(i); return a; }
 
-  call('webList', [], function (d) {
+  var listTries = 0;
+  function loadLists() {
+    listTries++;
+    call('webList', [], listsLoaded, function () {
+      if (listTries < 4) { setTimeout(loadLists, 1500 * listTries); return; }
+      ['inClass', 'suClass'].forEach(function (id) { $(id).innerHTML = '<option value="">Could not load — please refresh</option>'; });
+      $('enterErr').textContent = 'Could not load the lists. Please refresh the page.';
+      $('signupErr').textContent = 'Could not load the class list. Please refresh the page.';
+    });
+  }
+  loadLists();
+  function listsLoaded(d) {
     LIST = d;
-    opts($('inClass'), 'Choose class', d.반, saved.cls);
+    opts($('inClass'), 'Choose class', d.반, saved.cls || (ME && ME.반));
+    opts($('suClass'), 'Choose class', d.반, '');
     opts($('inBook'), 'Choose book', d.책, saved.book);
     opts($('inStage'), 'Choose', range(d.수업최대), saved.stage);
     opts($('inDraft'), 'Choose', range(d.초고최대), '');
     check();
-  }, function () { $('enterErr').textContent = 'Could not load the lists. Please refresh the page.'; });
+  }
 
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function hasStage() { return !!(LIST && LIST.단계책.indexOf($('inBook').value) !== -1); }
@@ -261,28 +473,28 @@
     var st = hasStage();
     $('stageBox').classList.toggle('hidden', !!$('inBook').value && !st);
     var stageOk = !st || $('inStage').value;
-    var hasMail = !!$('inEmail').value.trim();
-    $('pinBox').classList.toggle('hidden', hasMail);
-    var idOk = hasMail || /^\d{4}$/.test($('inPin').value.trim());
-    var ok = $('inName').value.trim() && idOk && $('inClass').value &&
+    var whoOk = (MODE && MODE.login) ? !!ME : ($('inName').value.trim() && $('inEmail').value.trim());
+    var ok = whoOk && $('inClass').value &&
              $('inBook').value && stageOk && $('inDraft').value;
     $('enterBtn').disabled = !ok;
     $('taskPreview').textContent = ($('inBook').value && stageOk && $('inDraft').value)
       ? 'Assignment: ' + $('inBook').value + (st ? ' ' + $('inStage').value + '-' + $('inDraft').value
                                              : ' draft ' + $('inDraft').value) : '';
   }
-  ['inName', 'inEmail', 'inPin', 'inClass', 'inBook', 'inStage', 'inDraft'].forEach(function (id) {
+  ['inName', 'inEmail', 'inClass', 'inBook', 'inStage', 'inDraft'].forEach(function (id) {
     $(id).oninput = check; $(id).onchange = check;
   });
 
   $('enterBtn').onclick = function () {
-    var who = { name: $('inName').value.trim(), email: $('inEmail').value.trim(), pin: $('inPin').value.trim(), cls: $('inClass').value,
+    var who = { name: $('inName').value.trim(), email: $('inEmail').value.trim(), cls: $('inClass').value,
                 book: $('inBook').value, stage: $('inStage').value };
+    if (MODE && MODE.login) { who.name = ME.이름; who.email = ME.이메일; }
     LS.set('mg_who', who);
     $('enterBtn').disabled = true; $('enterErr').textContent = '';
-    call('webEnter', [JSON.stringify({ name: who.name, email: who.email, pin: who.email ? '' : who.pin, cls: who.cls,
-                                          book: who.book, stage: hasStage() ? who.stage : '', draft: $('inDraft').value })], function (d) {
+    call('webEnter', [JSON.stringify({ name: who.name, email: who.email, cls: who.cls,
+                                          book: who.book, stage: hasStage() ? who.stage : '', draft: $('inDraft').value, token: TOKEN })], function (d) {
       $('enterBtn').disabled = false;
+      if (d.relogin || d.blocked) { setToken(''); ME = null; showLogin(d.blocked ? d.err : 'Please log in again.', !!d.blocked); return; }
       if (d.err) { $('enterErr').textContent = d.err; return; }
       if (d.closed) { $('enterErr').textContent = d.과제 + ' is closed.'; return; }
       if (d.done) { showDone(d); return; }
@@ -296,19 +508,14 @@
     var link = $('doneLink'); link.classList.add('hidden');
     if (d.공개) {
       $('doneIcon').textContent = '✉';
-      $('doneMsg').textContent = 'Your feedback is ready. Read it below.';
+      $('doneMsg').textContent = 'Your feedback is ready.';
       link.href = d.url; link.classList.remove('hidden');
-      if (d.피드백 && d.피드백.length) {
-        $('doneFb').innerHTML = d.피드백.map(fbPara).join('');
-        $('doneFb').classList.remove('hidden');
-        $('doneView').style.maxWidth = '820px';
-      }
     } else if (d.상태 === '마감') {
       $('doneIcon').textContent = '⏱';
       $('doneMsg').textContent = 'The deadline has passed. Please talk to your teacher.';
     } else {
       $('doneIcon').textContent = '✓';
-      $('doneMsg').textContent = 'Submitted! When your feedback is ready, come back to this page and enter the same details to read it.';
+      $('doneMsg').textContent = 'Submitted! You will get an email when your feedback is ready.';
     }
   }
 
@@ -626,7 +833,7 @@
     takeSnap();
     var data = serialize();
     var sentVer = ver;   // 저장하는 동안 더 쓴 게 있으면 dirty 유지
-    data.base = base; data.cid = CID;
+    data.base = base; data.cid = CID; data.token = TOKEN;
     data.snaps = snapQ.slice(); var sentN = data.snaps.length;
     call('webSave', [S.id, JSON.stringify(data)], function (r) {
       saving = false;
@@ -644,6 +851,14 @@
     });
   }
   function handleReject(r, cb) {
+    if (r.relogin) {
+      setState('Not saved — please log in again', 'bad');
+      needRelogin(); if (cb) cb(false); return;
+    }
+    if (r.blocked) {
+      saveLocal(true);
+      lock(r.err); if (cb) cb(false); return;
+    }
     if (r.conflict) {
       lock('This essay is open in another window or device. Close this one and write in only one place.');
     } else if (r.locked) {
@@ -714,7 +929,7 @@
     awayStart = null;
     $('finishBtn').disabled = true; setState('Submitting…', '');
     takeSnap();
-    var data = serialize(); data.base = base; data.cid = CID; data.auto = auto; data.snaps = snapQ.slice();
+    var data = serialize(); data.base = base; data.cid = CID; data.auto = auto; data.snaps = snapQ.slice(); data.token = TOKEN;
     call('webFinish', [S.id, JSON.stringify(data)], function (r) {
       finishing = false;
       if (r.ok) {
@@ -722,6 +937,8 @@
         showDone({ 과제: S.과제, 상태: r.상태, 공개: false });
       } else {
         $('finishBtn').disabled = false;
+        if (r.relogin) { needRelogin(function () { doFinish(auto); }); return; }
+        if (r.blocked) { handleReject(r); return; }
         if (r.err) { setState(r.err, 'bad'); toast(r.err); }
         else handleReject(r);
       }

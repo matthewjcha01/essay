@@ -763,9 +763,31 @@
   }
 
   // ── 붙여넣기·끌어넣기·잘라내기 막기 ──
+  // 붙여넣기 시도 기록: [시각, 'paste', 글자수, 출처]  출처 1 = 이미 쓴 자기 글, 2 = 프롬프트, 0 = 바깥 글
+  // (붙여넣으려던 내용 자체는 저장하지 않는다)
+  var lastPasteAt = 0;
+  function normTxt(s) { return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
+  function pasteInfo(e) {
+    var txt = '';
+    try { var dt = e.clipboardData || e.dataTransfer; if (dt && dt.getData) txt = dt.getData('text/plain') || dt.getData('text') || ''; } catch (x) {}
+    var c = normTxt(txt);
+    if (!c) return [0, -1];
+    var src = 0;
+    if (normTxt(bodyText() + ' ' + $('titleIn').value).indexOf(c) !== -1) src = 1;
+    else if (normTxt($('promptIn').value).indexOf(c) !== -1) src = 2;
+    return [c.length, src];
+  }
   function blocked(e, kind) {
     e.preventDefault();
-    if (kind === 'paste') { ev([nowSec(), 'paste']); markDirty(); }
+    if (kind === 'paste') {
+      var now = Date.now();
+      if (now - lastPasteAt > 300) {          // paste 와 beforeinput 이 같은 시도로 두 번 오는 것 막기
+        var pi = pasteInfo(e);
+        ev(pi[1] === -1 ? [nowSec(), 'paste'] : [nowSec(), 'paste', pi[0], pi[1]]);
+        markDirty();
+      }
+      lastPasteAt = now;
+    }
     toast(kind === 'cut' ? 'Cutting is turned off. Delete and retype instead.'
                          : 'Pasting is turned off. Please type it yourself.');
   }

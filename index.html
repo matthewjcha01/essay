@@ -91,6 +91,28 @@
     pointer-events: none; z-index: 20; max-width: 90vw; text-align: center; }
   #toast.show { opacity: .95; }
 
+  /* 내 글 목록 */
+  #myBox { margin: 14px 0 4px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
+  #myBox .head { display: flex; justify-content: space-between; align-items: baseline; }
+  #myBox .head b { font-size: 14px; }
+  #myNew { font-size: 12px; font-weight: 600; color: var(--good); }
+  .my { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 8px 0; border-bottom: 1px solid #f0f1f3; font-size: 14px; }
+  .my:last-child { border-bottom: 0; }
+  .my .name { min-width: 0; overflow-wrap: anywhere; }
+  .tag { font-size: 12px; border-radius: 10px; padding: 2px 8px; white-space: nowrap; }
+  .tag.waiting { background: #f1f3f4; color: var(--muted); }
+  .tag.new { background: #e6f4ea; color: var(--good); font-weight: 600; margin-left: 4px; }
+  .act { background: var(--accent); color: #fff; border: 0; border-radius: 6px; padding: 5px 10px;
+    font-size: 13px; white-space: nowrap; }
+  .act.soft { background: #e8eef6; color: var(--accent); }
+
+  /* 피드백 보기 */
+  #fbView { max-width: 780px; margin: 28px auto; padding: 0 16px 60px; }
+  #fvBody { -webkit-user-select: none; user-select: none; }
+  #fvBody p { margin: 0 0 10px; font: 16px/1.7 "Times New Roman", Times, serif; }
+  #fvBody .br { font-size: 13px; }
+
   /* 결과 화면 */
   #doneView { max-width: 480px; margin: 64px auto; padding: 0 16px; text-align: center; }
   #doneView .big { font-size: 20px; font-weight: 700; margin: 8px 0; }
@@ -164,6 +186,12 @@
         <div id="pwErr" class="err"></div>
       </div>
       <div id="payNote" class="payNote hidden"></div>
+      <div id="myBox" class="hidden">
+        <div class="head"><b>My essays</b><span id="myNew"></span></div>
+        <div id="myList"></div>
+        <button class="linkbtn hidden" id="myMore" style="margin-top:6px"></button>
+      </div>
+      <p class="sub" style="margin:14px 0 0">Start a new assignment:</p>
     </div>
     <div id="whoBox">
     <p class="sub">Enter your name and email, then choose your assignment.</p>
@@ -247,6 +275,19 @@
   </div>
 </div>
 
+<!-- feedback viewer -->
+<div id="fbView" class="hidden">
+  <p style="margin:0 0 12px"><button class="linkbtn" id="fvBack" style="font-size:14px">‹ Back</button></p>
+  <div class="card">
+    <h1 id="fvTitle"></h1>
+    <p class="sub" style="margin-bottom:16px">Read every note in green. Fix your next draft using this feedback.</p>
+    <div id="fvBody"></div>
+    <p id="fvLinkWrap" class="sub hidden" style="margin:18px 0 0">Have a question?
+      <a id="fvLink" href="#" target="_blank" rel="noopener" style="color:var(--accent)">Open it in Google Docs</a>
+      and leave a comment.</p>
+  </div>
+</div>
+
 <div id="modal" class="hidden">
   <div class="card">
     <div style="font-weight:700;font-size:17px">Submit your essay?</div>
@@ -289,7 +330,7 @@
       .withFailureHandler(function (e) { if (fail) fail(e); });
     r[fn].apply(r, args);
   }
-  function show(id) { ['enter', 'writer', 'doneView'].forEach(function (x) { $(x).classList.toggle('hidden', x !== id); }); }
+  function show(id) { ['enter', 'writer', 'doneView', 'fbView'].forEach(function (x) { $(x).classList.toggle('hidden', x !== id); }); }
 
   // ═══════════ 로그인 ═══════════
   var MODE = null;            // { login: true/false }
@@ -318,9 +359,79 @@
       $('payNote').classList.toggle('hidden', !ME.안내);
       $('payNote').textContent = ME.안내 || '';
       $('weakNote').classList.toggle('hidden', !ME.약함);
+      loadMine();
     }
     check();
   }
+
+  // ═══════════ 내 글 목록 ═══════════
+  var MINE = [], MINE_SHOWN = [], mineAll = false;
+  function loadMine() {
+    if (!TOKEN) return;
+    call('webMyEssays', [TOKEN], function (d) {
+      if (!d || !d.ok) return;
+      MINE = d.items || []; drawMine();
+    }, function () {});
+  }
+  function drawMine() {
+    var box = $('myBox');
+    if (!MINE.length) { box.classList.add('hidden'); return; }
+    box.classList.remove('hidden');
+    var seen = LS.get('mg_seen') || {};
+    var nNew = MINE.filter(function (x) { return x.kind === 'ready' && !seen[x.id]; }).length;
+    $('myNew').textContent = nNew ? '✉ ' + nNew + ' new feedback' : '';
+    MINE_SHOWN = mineAll ? MINE : MINE.slice(0, 5);
+    $('myList').innerHTML = MINE_SHOWN.map(function (x, i) {
+      var isNew = x.kind === 'ready' && !seen[x.id];
+      var right = x.kind === 'ready'
+        ? '<button class="act" data-i="' + i + '" data-act="view">View feedback</button>'
+        : x.kind === 'writing'
+        ? '<button class="act soft" data-i="' + i + '" data-act="go">Continue</button>'
+        : '<span class="tag waiting">Feedback coming</span>';
+      return '<div class="my"><span class="name">' + esc(x.과제) +
+             (isNew ? '<span class="tag new">New</span>' : '') + '</span>' + right + '</div>';
+    }).join('');
+    var more = $('myMore');
+    more.classList.toggle('hidden', MINE.length <= 5);
+    more.textContent = mineAll ? 'Show less' : 'Show all (' + MINE.length + ')';
+  }
+  $('myMore').onclick = function () { mineAll = !mineAll; drawMine(); };
+  $('myList').onclick = function (e) {
+    var b = e.target.closest ? e.target.closest('button[data-act]') : null;
+    if (!b) return;
+    var x = MINE_SHOWN[+b.getAttribute('data-i')];
+    if (!x) return;
+    if (b.getAttribute('data-act') === 'view') openFeedback(x);
+    else continueEssay(x);
+  };
+  // 쓰던 글 이어서 — 선택 칸을 채우고 Start 를 누른 것과 같게
+  function continueEssay(x) {
+    if (!LIST) { toast('Still loading. Please try again in a moment.'); return; }
+    $('inClass').value = x.반; $('inBook').value = x.책; check();
+    if (hasStage()) $('inStage').value = x.수업;
+    $('inDraft').value = x.초고; check();
+    if ($('enterBtn').disabled) { toast('Please choose your assignment below.'); return; }
+    $('enterBtn').click();
+  }
+  function openFeedback(x) {
+    show('fbView'); window.scrollTo(0, 0);
+    $('fvTitle').textContent = x.과제;
+    $('fvBody').innerHTML = '<p style="font-family:inherit;color:var(--muted)">Loading…</p>';
+    $('fvLinkWrap').classList.add('hidden');
+    call('webFeedback', [TOKEN, x.id], function (d) {
+      if (d.relogin) { setToken(''); ME = null; show('enter'); showLogin('Please log in again.'); return; }
+      if (!d.ok) { $('fvBody').innerHTML = '<p style="font-family:inherit;color:var(--bad)">' + esc(d.err || 'Please try again.') + '</p>'; return; }
+      $('fvBody').innerHTML = d.문단.map(fbPara).join('');
+      if (d.url) { $('fvLink').href = d.url; $('fvLinkWrap').classList.remove('hidden'); }
+      var seen = LS.get('mg_seen') || {}; seen[x.id] = 1; LS.set('mg_seen', seen);
+    }, function () {
+      $('fvBody').innerHTML = '<p style="font-family:inherit;color:var(--bad)">Connection error. Please try again.</p>';
+    });
+  }
+  $('fvBack').onclick = function () { show('enter'); drawMine(); };
+  ['copy', 'cut', 'contextmenu', 'dragstart'].forEach(function (t) {
+    $('fvBody').addEventListener(t, function (e) { e.preventDefault(); });
+  });
   function loggedIn(d) {
     ME = d; setToken(d.token);
     var w = LS.get('mg_who') || {}; w.email = d.이메일; if (!w.cls && d.반) w.cls = d.반; LS.set('mg_who', w);
@@ -396,7 +507,7 @@
 
   $('logoutBtn').onclick = function () {
     call('webLogout', [TOKEN], function () {}, function () {});
-    setToken(''); ME = null; showLogin('');
+    setToken(''); ME = null; MINE = []; drawMine(); showLogin('');
   };
 
   call('webMode', [], function (m) {

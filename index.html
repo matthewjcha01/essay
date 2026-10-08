@@ -573,7 +573,7 @@
     opts($('inClass'), 'Choose class', d.반, saved.cls || (ME && ME.반));
     opts($('suClass'), 'Choose class', d.반, '');
     opts($('inBook'), 'Choose book', d.책, saved.book);
-    opts($('inStage'), 'Choose', range(d.수업최대), saved.stage);
+    opts($('inStage'), 'Choose', range(d.수업최대).concat(d.수업추가 || []), saved.stage);
     opts($('inDraft'), 'Choose', range(d.초고최대), '');
     check();
   }

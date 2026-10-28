@@ -91,6 +91,23 @@
     pointer-events: none; z-index: 20; max-width: 90vw; text-align: center; }
   #toast.show { opacity: .95; }
 
+  /* Ask Mr. Cha / 답장 */
+  #askBtn { background: #fff; color: var(--accent); border: 1px solid #9fb6d3; border-radius: 8px; padding: 8px 14px; font-weight: 600; }
+  #askBtn.waiting { background: var(--warn-bg); color: var(--warn); border-color: #e8c48a; }
+  #askBox { position: fixed; top: 58px; right: 16px; z-index: 25; width: 340px; max-width: calc(100vw - 32px);
+    background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
+    box-shadow: 0 6px 24px rgba(0,0,0,.12); }
+  #askBox b { display: block; margin-bottom: 8px; }
+  #askIn { width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
+  #askBox .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+  #replyBar { flex: 1 1 100%; display: flex; gap: 10px; align-items: flex-start;
+    padding: 8px 12px; background: #e8f0fe; color: #174ea6;
+    border: 1px solid #c3d5f7; border-radius: 10px; font-size: 15px; }
+  #replyBar.flash { animation: rflash 1s ease-in-out 3; }
+  @keyframes rflash { 50% { background: #c9dcfb; } }
+  #replyBar span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  #replyX { background: none; border: 0; color: #174ea6; font-size: 18px; line-height: 1; padding: 0 2px; }
+
   /* 내 글 목록 */
   #myBox { margin: 14px 0 4px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; }
   #myBox .head { display: flex; justify-content: space-between; align-items: baseline; }
@@ -235,7 +252,18 @@
     <span class="spacer"></span>
     <span class="meta" id="wc">0 words</span>
     <span id="saveState">—</span>
+    <button id="askBtn" class="hidden" title="Mr. Cha will look at your writing now">✋ Ask Mr. Cha</button>
     <button id="finishBtn" class="primary">Finish</button>
+    <div id="replyBar" class="hidden"><b>Mr. Cha:</b><span id="replyMsg"></span><button id="replyX" title="Close">×</button></div>
+  </div>
+  <div id="askBox" class="hidden">
+    <b>Ask Mr. Cha to look at your writing</b>
+    <input id="askIn" type="text" maxlength="200" autocomplete="off" placeholder="What should he check? (optional)">
+    <div class="sub" style="margin:6px 0 0">Example: Is my topic sentence okay?</div>
+    <div class="row">
+      <button class="ghost" id="askCancel">Cancel</button>
+      <button class="primary" id="askSend">Send</button>
+    </div>
   </div>
   <div id="layout">
     <aside id="fbPanel" class="hidden">
@@ -690,6 +718,7 @@
     setInterval(tickDeadline, 20000);
     setInterval(function () { if (dirty) save(); }, 60000);
     setInterval(takeSnap, 30000);
+    liveStart();
     setState(dirty ? 'Not saved' : 'Saved', '');
     ed.focus();
   }
@@ -869,6 +898,7 @@
       if (d > 0) { b[0] += d; insTotal += d; } else if (d < 0) b[1] += -d;
       if (d >= 15) ev([nowSec(), 'jump', d]);   // 기준(25자)은 서버 설정에서 거른다
     }
+    LIVE.lastInput = Date.now();
     markDirty(); updateWC();
   }
   ed.addEventListener('input', onInput);
@@ -890,6 +920,7 @@
     setState('Not saved', '');
     clearTimeout(markDirty._t);
     markDirty._t = setTimeout(function () { saveLocal(true); }, 1500);
+    liveSoon();
   }
 
   // ── 화면 이탈 기록 ──
@@ -1004,6 +1035,7 @@
   function lock(msg) {
     locked = true; ed.contentEditable = 'false'; ed.classList.add('locked');
     $('titleIn').disabled = true; $('promptIn').disabled = true; $('finishBtn').disabled = true;
+    $('askBtn').classList.add('hidden'); $('askBox').classList.add('hidden');
     setState(msg, 'bad'); toast(msg, 6000);
   }
 
@@ -1043,6 +1075,106 @@
     el.classList.toggle('soon', left < 3600000);
   }
 
+  // ── 실시간: 선생님 모니터로 보내기 ──
+  //   타이핑이 멈추면 약 1.5초 뒤, 계속 쓰는 중이면 5초마다, 아무것도 안 해도 15초마다.
+  //   (정식 저장은 위의 save() 가 따로 1분마다 합니다)
+  var LIVE = { busy: false, again: false, t: null, lastInput: Date.now(), lastSent: 0,
+               ok: false, asking: false, askSend: undefined, replyT: 0, started: false };
+  function liveCount(kind) { var n = 0; (log.ev || []).forEach(function (a) { if (a[1] === kind) n++; }); return n; }
+  function livePayload() {
+    return { token: TOKEN, cid: CID, title: $('titleIn').value, prompt: $('promptIn').value,
+             text: bodyText(), wc: ((ed.innerText || ed.textContent || '').trim().match(/\S+/g) || []).length,
+             idle: Math.round((Date.now() - LIVE.lastInput) / 1000),
+             pastes: liveCount('paste'), aways: liveCount('away') };
+  }
+  function liveSoon() {
+    if (!LIVE.started) return;
+    clearTimeout(LIVE.t);
+    LIVE.t = setTimeout(liveSend, Date.now() - LIVE.lastSent > 5000 ? 0 : 1500);
+  }
+  function liveSend() {
+    if (!S || locked || !LIVE.started) return;
+    if (LIVE.busy) { LIVE.again = true; return; }
+    if (!navigator.onLine) return;
+    LIVE.busy = true; LIVE.lastSent = Date.now();
+    var p = livePayload();
+    var sentAsk = LIVE.askSend; LIVE.askSend = undefined;
+    if (sentAsk !== undefined) p.ask = sentAsk;
+    call('webLive', [S.id, JSON.stringify(p)], function (r) {
+      LIVE.busy = false;
+      if (r && r.ok) {
+        if (!LIVE.ok) { LIVE.ok = true; if (!locked) $('askBtn').classList.remove('hidden'); }
+        if (r.reply && r.reply.t > LIVE.replyT) {
+          var fresh = LIVE.replyT > 0 || LIVE.asking || Date.now() - r.reply.t < 10 * 60000;
+          LIVE.replyT = r.reply.t; LS.set('mg_rep_' + S.id, r.reply.t);
+          if (fresh) showReply(r.reply.msg);
+        }
+        // 선생님이 답장했거나 '확인'을 눌렀으면 기다림 끝
+        if (LIVE.asking && !r.ask && sentAsk === undefined && LIVE.askSend === undefined) { LIVE.asking = false; drawAsk(); }
+      } else if (sentAsk !== undefined && LIVE.askSend === undefined) LIVE.askSend = sentAsk;
+      if (LIVE.again) { LIVE.again = false; liveSoon(); }
+    }, function () {
+      LIVE.busy = false;
+      if (sentAsk !== undefined && LIVE.askSend === undefined) LIVE.askSend = sentAsk;
+    });
+  }
+  function liveStart() {
+    LIVE.started = true;
+    LIVE.replyT = LS.get('mg_rep_' + S.id) || 0;
+    liveSend();
+    setInterval(function () {
+      if (LIVE.asking || LIVE.askSend !== undefined) { if (Date.now() - LIVE.lastSent > 3500) liveSend(); }
+      else if (Date.now() - LIVE.lastSent > 15000) liveSend();
+    }, 1000);
+  }
+  function liveDone() {
+    if (!S || !LIVE.ok) return;
+    var p = livePayload(); p.done = true;
+    call('webLive', [S.id, JSON.stringify(p)], function () {}, function () {});
+  }
+
+  function drawAsk() {
+    var b = $('askBtn');
+    b.classList.toggle('waiting', LIVE.asking);
+    b.textContent = LIVE.asking ? '⏳ Waiting for Mr. Cha…' : '✋ Ask Mr. Cha';
+    b.title = LIVE.asking ? 'Click to cancel your question' : 'Mr. Cha will look at your writing now';
+  }
+  $('askBtn').onclick = function () {
+    if (locked) return;
+    if (LIVE.asking) {            // 다시 누르면 질문 취소
+      LIVE.asking = false; LIVE.askSend = false; drawAsk(); liveSend();
+      toast('Your question was canceled.'); return;
+    }
+    $('askBox').classList.remove('hidden'); $('askIn').value = ''; $('askIn').focus();
+  };
+  function closeAsk() { $('askBox').classList.add('hidden'); ed.focus(); }
+  $('askCancel').onclick = closeAsk;
+  $('askSend').onclick = function () {
+    var q = $('askIn').value.replace(KO, '').replace(/\s+/g, ' ').trim();
+    KO.lastIndex = 0;
+    LIVE.asking = true; LIVE.askSend = q; drawAsk();
+    $('askBox').classList.add('hidden');
+    liveSend();
+    toast('Sent! Keep writing — Mr. Cha will look at your essay.', 3500);
+    ed.focus();
+  };
+  $('askIn').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); $('askSend').click(); }
+    else if (e.key === 'Escape') closeAsk();
+  });
+  $('askIn').addEventListener('input', function () {
+    KO.lastIndex = 0;
+    if (KO.test(this.value)) { KO.lastIndex = 0; this.value = this.value.replace(KO, ''); koWarn(); }
+    KO.lastIndex = 0;
+  });
+  function showReply(msg) {
+    $('replyMsg').textContent = msg;
+    var bar = $('replyBar');
+    bar.classList.remove('hidden', 'flash'); void bar.offsetWidth; bar.classList.add('flash');
+    toast('New message from Mr. Cha', 3000);
+  }
+  $('replyX').onclick = function () { $('replyBar').classList.add('hidden'); ed.focus(); };
+
   // ── Finish ──
   $('finishBtn').onclick = function () {
     var words = ((ed.innerText || ed.textContent || '').trim().match(/\S+/g) || []).length;
@@ -1067,6 +1199,7 @@
       finishing = false;
       if (r.ok) {
         locked = true; LS.del(LSKEY); dirty = false;
+        liveDone();
         showDone({ 과제: S.과제, 상태: r.상태, 공개: false });
       } else {
         $('finishBtn').disabled = false;

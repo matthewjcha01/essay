@@ -1081,9 +1081,21 @@
   var LIVE = { busy: false, again: false, t: null, lastInput: Date.now(), lastSent: 0,
                ok: false, asking: false, askSend: undefined, replyT: 0, started: false };
   function liveCount(kind) { var n = 0; (log.ev || []).forEach(function (a) { if (a[1] === kind) n++; }); return n; }
+  // 모니터용 본문 — 학생 화면과 똑같이 빈 줄(빈 문단)까지 그대로
+  function liveText() {
+    var out = [];
+    for (var n = ed.firstChild; n; n = n.nextSibling) {
+      if (n.nodeType === 3) { if (n.data.trim()) out.push(n.data.replace(/\n/g, ' ')); continue; }
+      if (n.nodeType !== 1) continue;
+      var t = (n.innerText || n.textContent || '').replace(/\u00a0/g, ' ').replace(/\n+$/, '');
+      out.push(t);
+    }
+    while (out.length && !out[out.length - 1].trim()) out.pop();   // 맨 끝 빈 줄만 정리
+    return out.join('\n');
+  }
   function livePayload() {
     return { token: TOKEN, cid: CID, title: $('titleIn').value, prompt: $('promptIn').value,
-             text: bodyText(), wc: ((ed.innerText || ed.textContent || '').trim().match(/\S+/g) || []).length,
+             text: liveText(), wc: ((ed.innerText || ed.textContent || '').trim().match(/\S+/g) || []).length,
              idle: Math.round((Date.now() - LIVE.lastInput) / 1000),
              pastes: liveCount('paste'), aways: liveCount('away') };
   }

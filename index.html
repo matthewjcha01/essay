@@ -62,6 +62,12 @@
   .br { font: italic 12px/1.5 Arial, sans-serif; color: #3c4043; border-radius: 3px; padding: 0 2px; }
   .br.g { background: #e6f4ea; } .br.w { background: #fdf3e2; } .br.b { background: #fce9e7; }
   #fbToggle { display: none; }
+  mark.hl { background: #fff59d; color: inherit; border-radius: 2px; padding: 0 1px; }
+  #fbLegend { font: 12px/1.5 -apple-system, "Segoe UI", sans-serif; color: var(--muted);
+    background: #fffbe0; border-radius: 6px; padding: 6px 10px; margin: 0 0 10px; }
+  #goalBar { display: flex; gap: 8px; align-items: flex-start; background: #e6f4ea; color: #1b5e30;
+    border: 1px solid #bfe3c9; border-radius: 10px; padding: 8px 12px; margin-bottom: 10px; font-size: 14px; }
+  #goalBar b { white-space: nowrap; }
 
   #paperWrap { flex: 1; min-width: 0; }
   #tools { display: flex; gap: 6px; margin-bottom: 10px; align-items: center; flex-wrap: wrap; }
@@ -269,9 +275,11 @@
     <aside id="fbPanel" class="hidden">
       <button id="fbToggle">Hide</button>
       <h2>Feedback on your last draft</h2>
+      <div id="fbLegend" class="hidden"><mark class="hl">Yellow</mark> = a language mistake (spelling, grammar, or word choice). Find it and fix it yourself.</div>
       <div id="fbBody"></div>
     </aside>
     <div id="paperWrap">
+      <div id="goalBar" class="hidden"><b>🎯 Your goal:</b><span id="goalMsg"></span></div>
       <div id="tools">
         <button class="tool" data-cmd="bold" title="Bold (Ctrl/⌘+B)"><b>B</b></button>
         <button class="tool" data-cmd="italic" title="Italic (Ctrl/⌘+I)"><i>I</i></button>
@@ -710,8 +718,14 @@
     if (d.피드백) {
       $('fbPanel').classList.remove('hidden');
       if (d.피드백.대기) $('fbBody').innerHTML = '<p style="font-family:inherit;color:var(--muted)">Feedback on your last draft is not ready yet.</p>';
-      else $('fbBody').innerHTML = d.피드백.문단.map(fbPara).join('');
+      else {
+        $('fbBody').innerHTML = d.피드백.문단.map(fbPara).join('');
+        var 칠있음 = d.피드백.문단.some(function (p) { return p.indexOf('⟦') !== -1; });
+        $('fbLegend').classList.toggle('hidden', !칠있음);
+      }
     }
+    // 지난 에세이에서 정한 이번 에세이 목표
+    if (d.목표) { $('goalMsg').textContent = d.목표; $('goalBar').classList.remove('hidden'); }
     if (draft.불러옴 && !local) toast('Your last draft has been loaded. Revise it using the feedback.', 4000);
 
     updateWC(); tickDeadline();
@@ -729,6 +743,7 @@
       var c = m.indexOf('✅') !== -1 ? 'g' : m.indexOf('❌') !== -1 ? 'b' : m.indexOf('⚠') !== -1 ? 'w' : '';
       return '<span class="br ' + c + '">' + m + '</span>';
     });
+    h = h.replace(/⟦([^⟧]*)⟧/g, '<mark class="hl">$1</mark>');
     return '<p>' + h + '</p>';
   }
 

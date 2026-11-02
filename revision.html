@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>window.API_URL = "https://script.google.com/macros/s/AKfycbw8-enc6s-CPiL4S_m-06F3BWMsua1hWXfLL49PLvIE8ZR_fdlfSOujVCbzmvApOrg6/exec";</script>
+<title>Mind Grove Revision</title>
+<style>
+  :root {
+    --bg: #F6F5F1;
+    --card: #FFFFFF;
+    --ink: #1C1C1A;
+    --muted: #6B6A64;
+    --line: #E4E2DA;
+    --accent: #2F5D50;
+    --accent-soft: #E7EFEC;
+    --ok: #1E7B34;   --ok-bg: #E6F4EA;
+    --mid: #9A5B00;  --mid-bg: #FFF4E0;
+    --no: #B3261E;   --no-bg: #FCE8E6;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", Roboto, sans-serif;
+    font-size: 16px; line-height: 1.55;
+  }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 14px 16px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .brand { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+  h1 { font-size: 22px; margin: 0; line-height: 1.2; }
+  .meta { color: var(--muted); font-size: 14px; }
+  .prompt { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin-bottom: 12px; }
+  .label { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 2px; }
+  .grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 14px; }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  /* 옆으로 나란히: 화면 한 장에 맞추고, 양쪽이 각자 스크롤 */
+  @media (min-width: 640px) {
+    html, body { height: 100%; }
+    .wrap { height: 100vh; display: flex; flex-direction: column; }
+    .grid { flex: 1; min-height: 0; }
+    .fb { overflow: auto; min-height: 0; }
+    .editor { display: flex; flex-direction: column; min-height: 0; }
+    .editor textarea { flex: 1; min-height: 0; resize: none; }
+  }
+  h2 { font-size: 17px; margin: 0 0 10px; }
+  h3 { font-size: 14px; margin: 20px 0 8px; color: var(--accent); text-transform: uppercase; letter-spacing: .05em; }
+  .warn { background: var(--no-bg); color: var(--no); font-weight: 700; padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; }
+  .goal { border-left: 4px solid var(--line); padding: 2px 0 2px 12px; margin: 0 0 14px; }
+  .goal .g { font-weight: 600; }
+  .chip { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin: 4px 0; }
+  .ACHIEVED { border-color: var(--ok); } .ACHIEVED .chip { background: var(--ok-bg); color: var(--ok); }
+  .PARTLY { border-color: var(--mid); } .PARTLY .chip { background: var(--mid-bg); color: var(--mid); }
+  .NOTYET { border-color: var(--no); } .NOTYET .chip { background: var(--no-bg); color: var(--no); }
+  .quote { font-style: italic; color: #333; margin: 2px 0; }
+  .reason { color: var(--ink); }
+  .before { color: var(--muted); }
+  .after { font-weight: 600; }
+  .last { background: var(--accent-soft); border-radius: 10px; padding: 12px 14px; font-weight: 600; }
+  ul { margin: 6px 0 0; padding-left: 20px; }
+  .hint { color: var(--muted); font-size: 14px; }
+  textarea {
+    width: 100%; resize: vertical; border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px; font: inherit; font-size: 16px; line-height: 1.7; color: var(--ink); background: #FFFEFB;
+  }
+  textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+  .count { color: var(--muted); font-size: 14px; }
+  button {
+    background: var(--accent); color: #fff; border: 0; border-radius: 10px; padding: 12px 22px;
+    font: inherit; font-weight: 700; cursor: pointer; min-height: 46px;
+  }
+  button:disabled { opacity: .55; cursor: default; }
+  .status { margin-top: 10px; font-size: 14px; color: var(--muted); min-height: 20px; }
+  .status.err { color: var(--no); font-weight: 600; }
+  .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--accent);
+          border-radius: 50%; animation: s 0.9s linear infinite; vertical-align: -2px; margin-right: 6px; }
+  @keyframes s { to { transform: rotate(360deg); } }
+  .center { text-align: center; padding: 60px 16px; color: var(--muted); }
+  .flash { animation: f 1.2s ease-out; }
+  @keyframes f { from { background: var(--accent-soft); } to { background: var(--card); } }
+  /* 폰처럼 아주 좁은 화면에서만 위아래로 */
+  @media (max-width: 639px) {
+    .grid { grid-template-columns: 1fr; }
+    textarea { min-height: 55vh; }
+    button { width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap" id="app"><div class="center"><span class="spin"></span>Loading…</div></div>
+
+<script>
+var TOKEN = (new URLSearchParams(location.search).get('t') || '').replace(/[^a-zA-Z0-9]/g, '');
+
+// 서버 호출: GitHub 페이지에서 Apps Script로 직접 요청 (구글 계정과 무관하게 작동)
+function call(fn, args, ok, fail) {
+  fetch(window.API_URL, { method: 'POST', body: JSON.stringify({ fn: fn, args: args }) })
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+    .then(function (t) { var x = JSON.parse(t); if (x && x.__error) throw new Error(x.__error); ok(x.result); })
+    .catch(function (e) { if (fail) fail(e); });
+}
+var state = null;
+
+function el(tag, cls, text) {
+  var e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+function wordCount(s) {
+  var m = String(s || '').trim().match(/\S+/g);
+  return m ? m.length : 0;
+}
+
+function renderGoalsOnly(box, goals) {
+  box.appendChild(el('h2', null, 'Your revision goals'));
+  box.appendChild(el('p', 'hint', 'Fix these 3 things in your essay. Then press Submit to get feedback.'));
+  goals.forEach(function (g, i) {
+    var d = el('div', 'goal');
+    d.appendChild(el('div', 'g', (i + 1) + '. ' + g));
+    box.appendChild(d);
+  });
+  if (state.grammar) {
+    box.appendChild(el('h3', null, 'Grammar focus'));
+    box.appendChild(el('p', null, state.grammar));
+  }
+}
+
+function renderFeedback(box, fb, count) {
+  box.appendChild(el('h2', null, 'Feedback on submission ' + count));
+  if (fb.topic_warning) box.appendChild(el('div', 'warn', '⚠ ' + fb.topic_warning));
+
+  box.appendChild(el('h3', null, '1. Your goals'));
+  var labels = { 'ACHIEVED': 'Achieved', 'PARTLY': 'Partly', 'NOT YET': 'Not yet' };
+  (fb.goals || []).forEach(function (g, i) {
+    var v = String(g.verdict || '').toUpperCase();
+    var d = el('div', 'goal ' + v.replace(/\s/g, ''));
+    d.appendChild(el('div', 'g', 'Goal ' + (i + 1) + ': ' + (g.goal || state.goals[i] || '')));
+    d.appendChild(el('span', 'chip', labels[v] || v));
+    if (g.quote) d.appendChild(el('div', 'quote', '“' + g.quote + '”'));
+    d.appendChild(el('div', 'reason', g.reason || ''));
+    box.appendChild(d);
+  });
+
+  if (fb.improvement && fb.improvement.before) {
+    box.appendChild(el('h3', null, '2. What got better'));
+    box.appendChild(el('div', 'before', 'Before: ' + fb.improvement.before));
+    box.appendChild(el('div', 'after', 'After: ' + fb.improvement.after));
+    if (fb.improvement.why) box.appendChild(el('p', null, fb.improvement.why));
+  }
+
+  box.appendChild(el('h3', null, '3. One last thing'));
+  box.appendChild(el('div', 'last', fb.one_last_thing || ''));
+
+  var gr = fb.grammar || {};
+  var rem = (gr.remaining || []).filter(function (x) { return x; });
+  box.appendChild(el('h3', null, '4. Grammar check' + (gr.focus ? ': ' + gr.focus : '')));
+  if (rem.length) {
+    box.appendChild(el('p', 'hint', 'Find these in your essay and fix them yourself:'));
+    var ul = el('ul');
+    rem.forEach(function (t) { ul.appendChild(el('li', null, '“' + t + '”')); });
+    box.appendChild(ul);
+  } else {
+    box.appendChild(el('p', null, 'No errors left for this pattern. Nice work!'));
+  }
+}
+
+function render() {
+  var app = document.getElementById('app');
+  app.innerHTML = '';
+
+  var head = el('header');
+  var left = el('div');
+  left.appendChild(el('div', 'brand', 'Mind Grove · Revision'));
+  left.appendChild(el('h1', null, state.name));
+  head.appendChild(left);
+  head.appendChild(el('div', 'meta', state.cls + ' · Unit ' + state.unit +
+    (state.count ? ' · ' + state.count + ' submitted' : '')));
+  app.appendChild(head);
+
+  var p = el('div', 'prompt');
+  p.appendChild(el('div', 'label', 'Prompt'));
+  p.appendChild(el('div', null, state.prompt));
+  app.appendChild(p);
+
+  var grid = el('div', 'grid');
+  var fbBox = el('section', 'panel fb'); fbBox.id = 'fb';
+  if (state.feedback) renderFeedback(fbBox, state.feedback, state.count);
+  else renderGoalsOnly(fbBox, state.goals);
+  grid.appendChild(fbBox);
+
+  var ed = el('section', 'panel editor');
+  ed.appendChild(el('h2', null, 'Your essay'));
+  var ta = el('textarea'); ta.id = 'essay'; ta.value = state.essay; ta.spellcheck = false;
+  ed.appendChild(ta);
+  var bar = el('div', 'bar');
+  var cnt = el('span', 'count', wordCount(state.essay) + ' words');
+  var btn = el('button', null, 'Submit & get feedback'); btn.id = 'submit';
+  bar.appendChild(cnt); bar.appendChild(btn);
+  ed.appendChild(bar);
+  var st = el('div', 'status'); st.id = 'status';
+  ed.appendChild(st);
+  grid.appendChild(ed);
+  app.appendChild(grid);
+
+  ta.addEventListener('input', function () {
+    cnt.textContent = wordCount(ta.value) + ' words';
+    try { localStorage.setItem('mg-draft-' + TOKEN, ta.value); } catch (e) {}
+  });
+  btn.addEventListener('click', submit);
+}
+
+function submit() {
+  var ta = document.getElementById('essay');
+  var btn = document.getElementById('submit');
+  var st = document.getElementById('status');
+  var text = ta.value;
+  if (wordCount(text) < 20) { st.className = 'status err'; st.textContent = 'Your essay is too short.'; return; }
+  if (text.trim() === String(state.essay).trim()) {
+    st.className = 'status err'; st.textContent = 'You have not changed anything yet. Revise first, then submit.'; return;
+  }
+  btn.disabled = true; ta.readOnly = true;
+  st.className = 'status';
+  st.innerHTML = '<span class="spin"></span>Reading your essay… this takes about 30 seconds. Do not close this page.';
+  call('submitEssay', [TOKEN, text], function (res) {
+      state.feedback = res.feedback; state.count = res.count; state.essay = text;
+      try { localStorage.removeItem('mg-draft-' + TOKEN); } catch (e) {}
+      render();
+      var fb = document.getElementById('fb');
+      fb.classList.add('flash');
+      fb.scrollTop = 0;
+      if (window.innerWidth < 640) fb.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      var s2 = document.getElementById('status');
+      s2.textContent = 'Submitted! Read the feedback, then keep revising.';
+    }, function (err) {
+      btn.disabled = false; ta.readOnly = false;
+      st.className = 'status err';
+      st.textContent = 'Something went wrong. Your text is still here. Try again, or tell your teacher. (' + (err && err.message || err) + ')';
+    });
+}
+
+call('getPageData', [TOKEN], function (data) {
+    if (!data) {
+      document.getElementById('app').innerHTML =
+        '<div class="center">This link is not valid. Please ask your teacher for your link.</div>';
+      return;
+    }
+    state = data;
+    try {
+      var saved = localStorage.getItem('mg-draft-' + TOKEN);
+      if (saved && saved.trim() && saved !== state.essay) state.essayUnsaved = saved;
+    } catch (e) {}
+    render();
+    if (state.essayUnsaved) {
+      document.getElementById('essay').value = state.essayUnsaved;
+      document.getElementById('status').textContent = 'We restored the changes you had not submitted yet.';
+      document.querySelector('.count').textContent = wordCount(state.essayUnsaved) + ' words';
+    }
+  }, function (err) {
+    document.getElementById('app').innerHTML = '';
+    var d = el('div', 'center', 'Could not load your page. (' + (err && err.message || err) + ')');
+    document.getElementById('app').appendChild(d);
+  });
+</script>
+</body>
+</html>

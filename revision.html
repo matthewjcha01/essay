@@ -58,6 +58,11 @@
   .PARTLY { border-color: var(--mid); } .PARTLY .chip { background: var(--mid-bg); color: var(--mid); }
   .NOTYET { border-color: var(--no); } .NOTYET .chip { background: var(--no-bg); color: var(--no); }
   .quote { font-style: italic; color: #333; margin: 2px 0; }
+  .since { font-size: 14px; color: var(--muted); margin: 2px 0; }
+  .fix { margin: 8px 0 0; padding-left: 22px; }
+  .fix li { margin: 3px 0; }
+  .fixlabel { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--accent); margin-top: 8px; }
+  .hintbox { background: var(--mid-bg); border-radius: 8px; padding: 8px 10px; margin-top: 8px; font-size: 15px; }
   .reason { color: var(--ink); }
   .before { color: var(--muted); }
   .after { font-weight: 600; }
@@ -161,8 +166,17 @@ function renderFeedback(box, fb, count) {
     var d = el('div', 'goal ' + v.replace(/\s/g, ''));
     d.appendChild(el('div', 'g', 'Goal ' + (i + 1) + ': ' + (g.goal || state.goals[i] || '')));
     d.appendChild(el('span', 'chip', labels[v] || v));
+    if (g.since_last) d.appendChild(el('div', 'since', 'Since last time: ' + g.since_last));
     if (g.quote) d.appendChild(el('div', 'quote', '“' + g.quote + '”'));
     d.appendChild(el('div', 'reason', g.reason || ''));
+    var steps = (g.how_to_fix || []).filter(function (x) { return x; });
+    if (steps.length) {
+      d.appendChild(el('div', 'fixlabel', 'How to fix'));
+      var ol = el('ol', 'fix');
+      steps.forEach(function (t) { ol.appendChild(el('li', null, t)); });
+      d.appendChild(ol);
+    }
+    if (g.hint) d.appendChild(el('div', 'hintbox', '💡 ' + g.hint));
     box.appendChild(d);
   });
 

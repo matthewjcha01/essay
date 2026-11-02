@@ -43,6 +43,12 @@
     .editor textarea { flex: 1; min-height: 0; resize: none; }
   }
   h2 { font-size: 17px; margin: 0 0 10px; }
+  .score { display: flex; align-items: center; gap: 14px; background: var(--bg); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
+  .score .big { font-size: 28px; font-weight: 800; line-height: 1; white-space: nowrap; flex: none; }
+  .score .big small { font-size: 15px; font-weight: 600; color: var(--muted); }
+  .score .parts { font-size: 13px; color: var(--muted); line-height: 1.5; }
+  .score.pass { background: var(--ok-bg); } .score.pass .big { color: var(--ok); }
+  .done { background: var(--ok-bg); color: var(--ok); border-radius: 10px; padding: 12px 14px; font-weight: 700; margin-top: 12px; }
   h3 { font-size: 14px; margin: 20px 0 8px; color: var(--accent); text-transform: uppercase; letter-spacing: .05em; }
   .warn { background: var(--no-bg); color: var(--no); font-weight: 700; padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; }
   .goal { border-left: 4px solid var(--line); padding: 2px 0 2px 12px; margin: 0 0 14px; }
@@ -116,6 +122,11 @@ function wordCount(s) {
 function renderGoalsOnly(box, goals) {
   box.appendChild(el('h2', null, 'Your revision goals'));
   box.appendChild(el('p', 'hint', 'Fix these 3 things in your essay. Then press Submit to get feedback.'));
+  var t = el('div', 'score');
+  t.appendChild(el('div', 'big', String(state.passScore || 10)));
+  t.appendChild(el('div', 'parts', 'Reach ' + (state.passScore || 10) + ' / 12 to finish.' +
+    (state.firstScore != null ? ' Your first draft scored ' + state.firstScore + ' / 12.' : '')));
+  box.appendChild(t);
   goals.forEach(function (g, i) {
     var d = el('div', 'goal');
     d.appendChild(el('div', 'g', (i + 1) + '. ' + g));
@@ -129,6 +140,18 @@ function renderGoalsOnly(box, goals) {
 
 function renderFeedback(box, fb, count) {
   box.appendChild(el('h2', null, 'Feedback on submission ' + count));
+  if (fb.score && fb.score.total != null) {
+    var pass = fb.score.total >= (state.passScore || 10);
+    var sc = el('div', 'score' + (pass ? ' pass' : ''));
+    var big = el('div', 'big', String(fb.score.total));
+    big.appendChild(el('small', null, ' / 12'));
+    sc.appendChild(big);
+    sc.appendChild(el('div', 'parts',
+      'Task ' + fb.score.task + ' · Organization ' + fb.score.organization +
+      ' · Development ' + fb.score.development + ' · Language ' + fb.score.language +
+      (pass ? '' : ' — reach ' + (state.passScore || 10) + ' to finish')));
+    box.appendChild(sc);
+  }
   if (fb.topic_warning) box.appendChild(el('div', 'warn', '⚠ ' + fb.topic_warning));
 
   box.appendChild(el('h3', null, '1. Your goals'));
@@ -201,6 +224,10 @@ function render() {
   ed.appendChild(bar);
   var st = el('div', 'status'); st.id = 'status';
   ed.appendChild(st);
+  if (state.done) {
+    ta.readOnly = true; btn.style.display = 'none';
+    ed.appendChild(el('div', 'done', 'Finished! You reached ' + state.score + ' / 12. Great work — show your teacher.'));
+  }
   grid.appendChild(ed);
   app.appendChild(grid);
 
@@ -225,6 +252,7 @@ function submit() {
   st.innerHTML = '<span class="spin"></span>Reading your essay… this takes about 30 seconds. Do not close this page.';
   call('submitEssay', [TOKEN, text], function (res) {
       state.feedback = res.feedback; state.count = res.count; state.essay = text;
+      state.score = res.score; state.done = res.done; if (res.passScore) state.passScore = res.passScore;
       try { localStorage.removeItem('mg-draft-' + TOKEN); } catch (e) {}
       render();
       var fb = document.getElementById('fb');
@@ -232,7 +260,7 @@ function submit() {
       fb.scrollTop = 0;
       if (window.innerWidth < 640) fb.scrollIntoView({ behavior: 'smooth', block: 'start' });
       var s2 = document.getElementById('status');
-      s2.textContent = 'Submitted! Read the feedback, then keep revising.';
+      if (!state.done) s2.textContent = 'Submitted! Read the feedback, then keep revising.';
     }, function (err) {
       btn.disabled = false; ta.readOnly = false;
       st.className = 'status err';

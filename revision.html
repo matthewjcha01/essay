@@ -48,6 +48,11 @@
   .score .big small { font-size: 15px; font-weight: 600; color: var(--muted); }
   .score .parts { font-size: 13px; color: var(--muted); line-height: 1.5; }
   .score.pass { background: var(--ok-bg); } .score.pass .big { color: var(--ok); }
+  .waitbox { background: var(--accent-soft); border-radius: 12px; padding: 22px 18px; text-align: center; }
+  .waitbox .w1 { font-size: 20px; font-weight: 800; color: var(--accent); margin-bottom: 6px; }
+  .waitbox .w2 { color: var(--ink); }
+  .tnote { background: var(--mid-bg); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
+  .tnote .label { color: var(--mid); }
   .done { background: var(--ok-bg); color: var(--ok); border-radius: 10px; padding: 12px 14px; font-weight: 700; margin-top: 12px; }
   h3 { font-size: 14px; margin: 20px 0 8px; color: var(--accent); text-transform: uppercase; letter-spacing: .05em; }
   .warn { background: var(--no-bg); color: var(--no); font-weight: 700; padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; }
@@ -128,9 +133,15 @@ function renderGoalsOnly(box, goals) {
   box.appendChild(el('h2', null, 'Your revision goals'));
   box.appendChild(el('p', 'hint', 'Fix these 3 things in your essay. Then press Submit to get feedback.'));
   var t = el('div', 'score');
-  t.appendChild(el('div', 'big', String(state.passScore || 10)));
-  t.appendChild(el('div', 'parts', 'Reach ' + (state.passScore || 10) + ' / 12 to finish.' +
-    (state.firstScore != null ? ' Your first draft scored ' + state.firstScore + ' / 12.' : '')));
+  if (state.formal) {
+    t.appendChild(el('div', 'big', (state.passScore || 80) + ' (B-)'));
+    t.appendChild(el('div', 'parts', 'Reach ' + (state.passScore || 80) + ' (B-) and your teacher will check your essay.' +
+      (state.firstScore != null ? ' Your last draft scored ' + state.firstScore + ' (' + state.firstLetter + ').' : '')));
+  } else {
+    t.appendChild(el('div', 'big', String(state.passScore || 10)));
+    t.appendChild(el('div', 'parts', 'Reach ' + (state.passScore || 10) + ' / 12 to finish.' +
+      (state.firstScore != null ? ' Your first draft scored ' + state.firstScore + ' / 12.' : '')));
+  }
   box.appendChild(t);
   goals.forEach(function (g, i) {
     var d = el('div', 'goal');
@@ -145,7 +156,23 @@ function renderGoalsOnly(box, goals) {
 
 function renderFeedback(box, fb, count) {
   box.appendChild(el('h2', null, 'Feedback on submission ' + count));
-  if (fb.score && fb.score.total != null) {
+  if (state.teacherNote) {
+    var tn = el('div', 'tnote');
+    tn.appendChild(el('div', 'label', 'From your teacher'));
+    tn.appendChild(el('div', null, state.teacherNote));
+    box.appendChild(tn);
+  }
+  if (state.formal && fb.score && fb.score.total != null) {
+    var sc2 = el('div', 'score' + (state.done ? ' pass' : ''));
+    var big2 = el('div', 'big', String(fb.score.total));
+    big2.appendChild(el('small', null, ' / 100' + (fb.score.letter ? ' (' + fb.score.letter + ')' : '')));
+    sc2.appendChild(big2);
+    sc2.appendChild(el('div', 'parts',
+      'Intro ' + fb.score.intro + '/20 · Body ' + fb.score.body + '/40 · Conclusion ' + fb.score.conclusion +
+      '/15 · Language ' + fb.score.language + '/25' +
+      (state.done ? '' : ' — reach ' + (state.passScore || 80) + ' (B-) for your teacher to check')));
+    box.appendChild(sc2);
+  } else if (fb.score && fb.score.total != null) {
     var pass = fb.score.total >= (state.passScore || 10);
     var sc = el('div', 'score' + (pass ? ' pass' : ''));
     var big = el('div', 'big', String(fb.score.total));
@@ -203,6 +230,29 @@ function renderFeedback(box, fb, count) {
   }
 }
 
+function renderPending(box) {
+  var w = el('div', 'waitbox');
+  w.appendChild(el('div', 'w1', 'Your teacher is checking your essay'));
+  w.appendChild(el('div', 'w2', 'This draft reached the level for a teacher check. Your score and feedback will appear here when your teacher is done.'));
+  w.appendChild(el('p', 'hint', 'This page updates by itself. You can keep it open.'));
+  box.appendChild(w);
+  startPolling();
+}
+
+var pollTimer = null;
+function startPolling() {
+  if (pollTimer) return;
+  pollTimer = setInterval(function () {
+    call('getPageData', [TOKEN], function (data) {
+      if (data && !data.pending) {
+        clearInterval(pollTimer); pollTimer = null;
+        state = data; render();
+        document.getElementById('fb').classList.add('flash');
+      }
+    });
+  }, 20000);
+}
+
 function render() {
   var app = document.getElementById('app');
   app.innerHTML = '';
@@ -223,7 +273,8 @@ function render() {
 
   var grid = el('div', 'grid');
   var fbBox = el('section', 'panel fb'); fbBox.id = 'fb';
-  if (state.feedback) renderFeedback(fbBox, state.feedback, state.count);
+  if (state.pending) renderPending(fbBox);
+  else if (state.feedback) renderFeedback(fbBox, state.feedback, state.count);
   else renderGoalsOnly(fbBox, state.goals);
   grid.appendChild(fbBox);
 
@@ -238,9 +289,13 @@ function render() {
   ed.appendChild(bar);
   var st = el('div', 'status'); st.id = 'status';
   ed.appendChild(st);
-  if (state.done) {
+  if (state.pending) {
     ta.readOnly = true; btn.style.display = 'none';
-    ed.appendChild(el('div', 'done', 'Finished! You reached ' + state.score + ' / 12. Great work — show your teacher.'));
+  } else if (state.done) {
+    ta.readOnly = true; btn.style.display = 'none';
+    ed.appendChild(el('div', 'done', state.formal
+      ? 'Finished! Your final score is ' + state.score + ' (' + state.letter + ').'
+      : 'Finished! You reached ' + state.score + ' / 12. Great work — show your teacher.'));
   }
   grid.appendChild(ed);
   app.appendChild(grid);
@@ -265,8 +320,9 @@ function submit() {
   st.className = 'status';
   st.innerHTML = '<span class="spin"></span>Reading your essay… this takes about 30 seconds. Do not close this page.';
   call('submitEssay', [TOKEN, text], function (res) {
-      state.feedback = res.feedback; state.count = res.count; state.essay = text;
+      state.feedback = res.feedback || null; state.count = res.count; state.essay = text;
       state.score = res.score; state.done = res.done; if (res.passScore) state.passScore = res.passScore;
+      state.pending = !!res.pending; state.letter = res.letter || ''; state.teacherNote = ''; state.returned = false;
       try { localStorage.removeItem('mg-draft-' + TOKEN); } catch (e) {}
       render();
       var fb = document.getElementById('fb');
@@ -274,7 +330,8 @@ function submit() {
       fb.scrollTop = 0;
       if (window.innerWidth < 640) fb.scrollIntoView({ behavior: 'smooth', block: 'start' });
       var s2 = document.getElementById('status');
-      if (!state.done) s2.textContent = 'Submitted! Read the feedback, then keep revising.';
+      if (state.pending) s2.textContent = 'Submitted! Your teacher will check it.';
+      else if (!state.done) s2.textContent = 'Submitted! Read the feedback, then keep revising.';
     }, function (err) {
       btn.disabled = false; ta.readOnly = false;
       st.className = 'status err';

@@ -134,9 +134,13 @@ function renderGoalsOnly(box, goals) {
   box.appendChild(el('p', 'hint', 'Fix these 3 things in your essay. Then press Submit to get feedback.'));
   var t = el('div', 'score');
   if (state.formal) {
-    t.appendChild(el('div', 'big', (state.passScore || 80) + ' (B-)'));
-    t.appendChild(el('div', 'parts', 'Reach ' + (state.passScore || 80) + ' (B-) and your teacher will check your essay.' +
-      (state.firstScore != null ? ' Your last draft scored ' + state.firstScore + ' (' + state.firstLetter + ').' : '')));
+    if (state.firstScore != null) {
+      var big0 = el('div', 'big', String(state.firstScore));
+      big0.appendChild(el('small', null, ' / 100 (' + state.firstLetter + ')'));
+      t.appendChild(big0);
+    }
+    t.appendChild(el('div', 'parts', (state.firstScore != null ? 'Your score now. ' : '') +
+      'Goal: reach ' + (state.passScore || 80) + ' (B-), and your teacher will check your essay.'));
   } else {
     t.appendChild(el('div', 'big', String(state.passScore || 10)));
     t.appendChild(el('div', 'parts', 'Reach ' + (state.passScore || 10) + ' / 12 to finish.' +

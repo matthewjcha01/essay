@@ -595,6 +595,19 @@ function submit() {
   if (text.trim() === htmlToMarkupFrom(state.essay).trim()) {
     st.className = 'status err'; st.textContent = 'You have not changed anything yet. Revise first, then submit.'; return;
   }
+  var lim = state.limit || {};
+  if (!lim.off && lim.nextAt && lim.nextAt > Date.now()) {
+    var m = Math.ceil((lim.nextAt - Date.now()) / 60000);
+    st.className = 'status err';
+    st.textContent = 'You can submit again in ' + m + (m === 1 ? ' minute' : ' minutes') +
+      '. Use this time to read your feedback and fix more than one thing.';
+    return;
+  }
+  if (!lim.off && lim.perDay && lim.left === 0) {
+    st.className = 'status err';
+    st.textContent = 'You have used all ' + lim.perDay + ' submissions for today. Keep revising. You can submit again tomorrow.';
+    return;
+  }
   btn.disabled = true; ta.readOnly = true;
   st.className = 'status';
   st.innerHTML = '<span class="spin"></span>Reading your essay… this takes about ' + (state.formal ? '1–2 minutes' : '30 seconds') +
@@ -603,6 +616,10 @@ function submit() {
       state.feedback = res.feedback || null; state.count = res.count; state.essay = text;
       state.score = res.score; state.done = res.done; if (res.passScore) state.passScore = res.passScore;
       state.pending = !!res.pending; state.letter = res.letter || ''; state.teacherNote = ''; state.returned = false;
+      if (state.limit && !state.limit.off) {
+        state.limit.nextAt = Date.now() + (state.limit.gapMin || 10) * 60000;
+        state.limit.left = Math.max(0, (state.limit.left || 1) - 1);
+      }
       try { localStorage.removeItem('mg-draft-' + TOKEN); } catch (e) {}
       render();
       var fb = document.getElementById('fb');
@@ -617,7 +634,9 @@ function submit() {
     }, function (err) {
       btn.disabled = false; ta.readOnly = false;
       st.className = 'status err';
-      st.textContent = 'Something went wrong. Your text is still here. Try again, or tell your teacher. (' + (err && err.message || err) + ')';
+      var msg = String(err && err.message || err);
+      if (msg.indexOf('LIMIT: ') === 0) st.textContent = msg.slice(7);
+      else st.textContent = 'Something went wrong. Your text is still here. Try again, or tell your teacher. (' + msg + ')';
     });
 }
 

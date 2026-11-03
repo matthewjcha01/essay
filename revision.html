@@ -74,6 +74,20 @@
   .last { background: var(--accent-soft); border-radius: 10px; padding: 12px 14px; font-weight: 600; }
   ul { margin: 6px 0 0; padding-left: 20px; }
   .hint { color: var(--muted); font-size: 14px; }
+  /* 정식 에세이: 내 글에 단 코멘트 */
+  .marked { font: 16px/1.85 "Times New Roman", Times, serif; color: #000; background: #fff; border: 1px solid var(--line);
+            border-radius: 10px; padding: 14px 16px; margin: 4px 0 6px; }
+  .marked .mp { margin: 0 0 4px; text-indent: .4in; }
+  .marked .mp.c { text-indent: 0; text-align: center; }
+  .marked mark { border-radius: 2px; padding: 0 1px; color: inherit; }
+  .marked mark.fix { background: #fcd9d6; } .marked mark.check { background: #ffeaa8; } .marked mark.good { background: #d4efdc; }
+  .marked sup { font: 700 10px -apple-system, sans-serif; color: var(--muted); margin-left: 1px; }
+  .notes { margin: 2px 0 12px; padding: 0; list-style: none; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif; }
+  .notes li { display: flex; gap: 8px; padding: 6px 0; border-top: 1px dashed var(--line); }
+  .notes .n { flex: 0 0 auto; font-weight: 800; color: var(--muted); min-width: 18px; }
+  .notes .tag { flex: 0 0 auto; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 1px 8px; height: fit-content; }
+  .tag.fix { background: var(--no-bg); color: var(--no); } .tag.check { background: var(--mid-bg); color: var(--mid); }
+  .tag.good { background: var(--ok-bg); color: var(--ok); }
   /* 에세이 편집기 — 쓰기 페이지처럼 MLA 모양 (Times New Roman, 두 줄 간격, 문단 들여쓰기) */
   .tools { display: flex; gap: 6px; margin-bottom: 8px; align-items: center; flex-wrap: wrap; }
   .tool { width: 38px; height: 34px; min-height: 0; padding: 0; border: 1px solid var(--line); background: var(--card);
@@ -291,6 +305,8 @@ function renderFeedback(box, fb, count) {
   }
   if (fb.topic_warning) box.appendChild(el('div', 'warn', '⚠ ' + fb.topic_warning));
 
+  if (state.formal && fb.annotations && fb.annotations.length) renderMarked(box, fb.annotations, state.essay);
+
   box.appendChild(el('h3', null, '1. Your goals'));
   var labels = { 'ACHIEVED': 'Achieved', 'PARTLY': 'Partly', 'NOT YET': 'Not yet' };
   (fb.goals || []).forEach(function (g, i) {
@@ -333,6 +349,66 @@ function renderFeedback(box, fb, count) {
   } else {
     box.appendChild(el('p', null, 'No errors left for this pattern. Nice work!'));
   }
+}
+
+// 정식 에세이: 제출한 글 위에 선생님처럼 표시 + 문단마다 코멘트
+function renderMarked(box, anns, essay) {
+  box.appendChild(el('h3', null, 'Comments on your essay'));
+  box.appendChild(el('p', 'hint', 'Red = must fix · Yellow = think again · Green = this works. Fix them in your essay on the right.'));
+  var norm = function (t) { return String(t || '').replace(/[‘’]/g, "'").replace(/[“”]/g, '"'); };
+  var paras = String(essay || '').split('\n').map(function (line) {
+    var c = /^<center>[\s\S]*<\/center>$/.test(line);
+    return { c: c, t: plainText(line) };
+  });
+  // 빈 줄을 뺀 문단 번호 (AI 가 세는 방식)
+  var real = []; paras.forEach(function (p, i) { if (p.t.trim()) real.push(i); });
+  var byPara = {}, loose = [], num = 0;
+  anns.forEach(function (a) {
+    num++; a._n = num;
+    var kind = /^(fix|check|good)$/.test(a.kind) ? a.kind : 'check'; a._k = kind;
+    var q = norm(a.quote).trim(), hit = -1, at = -1;
+    var guess = real[(Number(a.para) || 0) - 1];
+    var order = guess != null ? [guess].concat(real.filter(function (x) { return x !== guess; })) : real;
+    for (var k = 0; q && k < order.length; k++) {
+      var pos = norm(paras[order[k]].t).indexOf(q);
+      if (pos === -1) pos = norm(paras[order[k]].t).toLowerCase().indexOf(q.toLowerCase());
+      if (pos !== -1) { hit = order[k]; at = pos; break; }
+    }
+    if (hit === -1) { (guess != null ? (byPara[guess] = byPara[guess] || []) : loose).push(a); a._at = -1; return; }
+    a._at = at; a._len = q.length;
+    (byPara[hit] = byPara[hit] || []).push(a);
+  });
+  var wrap = el('div', 'marked');
+  real.forEach(function (i) {
+    var p = paras[i], list = (byPara[i] || []).slice();
+    var spans = list.filter(function (a) { return a._at >= 0; }).sort(function (x, y) { return x._at - y._at; });
+    var html = '', pos = 0;
+    spans.forEach(function (a) {
+      if (a._at < pos) return;                     // 겹치면 표시는 건너뛰고 코멘트만
+      html += escH(p.t.slice(pos, a._at)) + '<mark class="' + a._k + '">' + escH(p.t.slice(a._at, a._at + a._len)) +
+              '</mark><sup>' + a._n + '</sup>';
+      pos = a._at + a._len;
+    });
+    html += escH(p.t.slice(pos));
+    var d = el('div', 'mp' + (p.c ? ' c' : '')); d.innerHTML = html;
+    wrap.appendChild(d);
+    if (list.length) {
+      list.sort(function (x, y) { return x._n - y._n; });
+      var ul = el('ul', 'notes');
+      list.forEach(function (a) { ul.appendChild(noteLi(a)); });
+      wrap.appendChild(ul);
+    }
+  });
+  if (loose.length) { var ul2 = el('ul', 'notes'); loose.forEach(function (a) { ul2.appendChild(noteLi(a)); }); wrap.appendChild(ul2); }
+  box.appendChild(wrap);
+}
+function noteLi(a) {
+  var li = el('li');
+  li.appendChild(el('span', 'n', String(a._n)));
+  li.appendChild(el('span', 'tag ' + a._k, (a.part || '') + (a._k === 'fix' ? ' · fix' : a._k === 'good' ? ' · good' : ' · check')));
+  var t = el('span', null, (a._at === -1 && a.quote ? '“' + a.quote + '” — ' : '') + (a.note || ''));
+  li.appendChild(t);
+  return li;
 }
 
 function renderPending(box) {
@@ -482,7 +558,8 @@ function submit() {
   }
   btn.disabled = true; ta.readOnly = true;
   st.className = 'status';
-  st.innerHTML = '<span class="spin"></span>Reading your essay… this takes about 30 seconds. Do not close this page.';
+  st.innerHTML = '<span class="spin"></span>Reading your essay… this takes about ' + (state.formal ? '1–2 minutes' : '30 seconds') +
+    '. Do not close this page.';
   call('revSubmit', [TOKEN, text], function (res) {
       state.feedback = res.feedback || null; state.count = res.count; state.essay = text;
       state.score = res.score; state.done = res.done; if (res.passScore) state.passScore = res.passScore;

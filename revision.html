@@ -40,7 +40,7 @@
     .grid { flex: 1; min-height: 0; }
     .fb { overflow: auto; min-height: 0; }
     .editor { display: flex; flex-direction: column; min-height: 0; }
-    .editor textarea { flex: 1; min-height: 0; resize: none; }
+    .editor .doc { flex: 1; min-height: 0; }
   }
   h2 { font-size: 17px; margin: 0 0 10px; }
   .score { display: flex; align-items: center; gap: 14px; background: var(--bg); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
@@ -74,11 +74,19 @@
   .last { background: var(--accent-soft); border-radius: 10px; padding: 12px 14px; font-weight: 600; }
   ul { margin: 6px 0 0; padding-left: 20px; }
   .hint { color: var(--muted); font-size: 14px; }
-  textarea {
-    width: 100%; resize: vertical; border: 1px solid var(--line); border-radius: 10px;
-    padding: 14px; font: inherit; font-size: 16px; line-height: 1.7; color: var(--ink); background: #FFFEFB;
-  }
-  textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  /* 에세이 편집기 — 쓰기 페이지처럼 MLA 모양 (Times New Roman, 두 줄 간격, 문단 들여쓰기) */
+  .tools { display: flex; gap: 6px; margin-bottom: 8px; align-items: center; flex-wrap: wrap; }
+  .tool { width: 38px; height: 34px; min-height: 0; padding: 0; border: 1px solid var(--line); background: var(--card);
+          color: var(--ink); border-radius: 6px; font: 16px "Times New Roman", Times, serif; cursor: pointer; }
+  .tool.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  .tool.wide { width: auto; padding: 0 10px; font: 13px -apple-system, "Segoe UI", sans-serif; }
+  .tools .sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
+  .doc { width: 100%; overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: #fff;
+         padding: 22px 26px; font: 17px/2 "Times New Roman", Times, serif; color: #000; outline: none; min-height: 50vh; }
+  .doc:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .doc p { margin: 0; text-indent: .5in; min-height: 2em; }
+  .doc p.c, .doc p[style*="center"] { text-indent: 0; text-align: center; }
+  .doc[contenteditable="false"] { background: #FAFAF7; }
   .bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
   .count { color: var(--muted); font-size: 14px; }
   button {
@@ -109,7 +117,8 @@
   /* 폰처럼 아주 좁은 화면에서만 위아래로 */
   @media (max-width: 639px) {
     .grid { grid-template-columns: 1fr; }
-    textarea { min-height: 55vh; }
+    .doc { min-height: 55vh; padding: 16px; }
+    .tool { width: 38px; }
     button { width: 100%; }
     .btns { width: 100%; }
     .reply .rx, .askbox button { width: auto; }
@@ -139,8 +148,86 @@ function el(tag, cls, text) {
 }
 
 function wordCount(s) {
-  var m = String(s || '').trim().match(/\S+/g);
+  var m = plainText(s).trim().match(/\S+/g);
   return m ? m.length : 0;
+}
+
+// ── 서식 있는 글 ↔ 저장용 글 ──
+//  저장 모양: 한 줄 = 한 문단. 굵게·기울임·밑줄은 <b> <i> <u>, 가운데 줄은 <center>…</center>
+//  (시트에서도 읽을 수 있고, AI 도 이 표시로 이탤릭 등을 압니다)
+// 저장된 글을 편집기에 넣었다 꺼낸 모양 (아무것도 안 고쳤는지 비교용)
+function htmlToMarkupFrom(m) { var d = document.createElement('div'); d.innerHTML = markupToHtml(m); d.style.cssText = 'position:absolute;left:-9999px'; document.body.appendChild(d); var r = htmlToMarkup(d); d.remove(); return r; }
+function plainText(s) { return String(s || '').replace(/<\/?(b|i|u|center)>/g, ''); }
+function escH(s) { return String(s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
+function markupToHtml(m) {
+  var lines = String(m || '').replace(/\r/g, '').split('\n');
+  return lines.map(function (line) {
+    var c = /^<center>[\s\S]*<\/center>$/.test(line);
+    if (c) line = line.slice(8, -9);
+    var h = escH(line).replace(/&lt;(\/?)(b|i|u)&gt;/g, '<$1$2>');
+    return '<p' + (c ? ' class="c"' : '') + '>' + (h || '<br>') + '</p>';
+  }).join('');
+}
+function htmlToMarkup(root) {
+  var lines = [], cur = null;
+  function newLine(center) { cur = { c: center, runs: [] }; lines.push(cur); }
+  function addText(t, st) {
+    if (!cur) newLine(false);
+    t = t.replace(/ /g, ' ').replace(/\n/g, ' ');
+    if (!t) return;
+    var last = cur.runs[cur.runs.length - 1];
+    if (last && last.b === st.b && last.i === st.i && last.u === st.u) last.t += t;
+    else cur.runs.push({ t: t, b: st.b, i: st.i, u: st.u });
+  }
+  function walk(n, st, top) {
+    if (n.nodeType === 3) { addText(n.data, st); return; }
+    if (n.nodeType !== 1) return;
+    var tag = n.tagName;
+    if (tag === 'BR') { if (top) newLine(false); else if (cur && cur.runs.length) newLine(cur.c); return; }
+    var cs = window.getComputedStyle(n);
+    var block = /^(P|DIV|H\d|LI|BLOCKQUOTE)$/.test(tag);
+    if (block) newLine(cs.textAlign === 'center' || n.classList.contains('c') || n.getAttribute('align') === 'center');
+    var s2 = {
+      b: st.b || tag === 'B' || tag === 'STRONG' || Number(cs.fontWeight) >= 600,
+      i: st.i || tag === 'I' || tag === 'EM' || cs.fontStyle === 'italic',
+      u: st.u || tag === 'U' || /underline/.test(cs.textDecorationLine || cs.textDecoration || '')
+    };
+    for (var k = n.firstChild; k; k = k.nextSibling) walk(k, s2, false);
+    if (block) cur = null;
+  }
+  for (var k = root.firstChild; k; k = k.nextSibling) walk(k, { b: false, i: false, u: false }, true);
+  var out = lines.map(function (L) {
+    var t = L.runs.map(function (r) {
+      var x = escTagChars(r.t);
+      if (r.u) x = '<u>' + x + '</u>';
+      if (r.i) x = '<i>' + x + '</i>';
+      if (r.b) x = '<b>' + x + '</b>';
+      return x;
+    }).join('');
+    return L.c && t ? '<center>' + t + '</center>' : t;
+  });
+  while (out.length && !plainText(out[out.length - 1]).trim()) out.pop();
+  return out.join('\n');
+}
+// 학생이 직접 쓴 "<i>" 같은 글자가 서식으로 바뀌지 않게
+function escTagChars(t) { return t.replace(/<(\/?(b|i|u|center))>/g, '‹$1›'); }
+function makeEditor(markup) {
+  var d = el('div', 'doc');
+  d.id = 'essay'; d.contentEditable = 'true'; d.spellcheck = true;
+  d.setAttribute('lang', 'en');
+  try { document.execCommand('defaultParagraphSeparator', false, 'p'); } catch (e) {}
+  d.innerHTML = markupToHtml(markup);
+  Object.defineProperty(d, 'value', {
+    get: function () { return htmlToMarkup(d); },
+    set: function (v) { d.innerHTML = markupToHtml(v); }
+  });
+  Object.defineProperty(d, 'readOnly', {
+    get: function () { return d.contentEditable === 'false'; },
+    set: function (v) { d.contentEditable = v ? 'false' : 'true'; }
+  });
+  // 비우면 문단 하나는 남겨 두기 (들여쓰기가 유지되게)
+  d.addEventListener('input', function () { if (!d.firstChild) d.innerHTML = '<p><br></p>'; });
+  return d;
 }
 
 function renderGoalsOnly(box, goals) {
@@ -308,8 +395,32 @@ function render() {
   rx.onclick = function () { rb.style.display = 'none'; LIVE.lastReply = ''; };
   rb.appendChild(rx);
   ed.appendChild(rb);
-  var ta = el('textarea'); ta.id = 'essay'; ta.value = state.essay; ta.spellcheck = false;
+  var tools = el('div', 'tools');
+  [['bold', '<b>B</b>', 'Bold (Ctrl/⌘+B)'], ['italic', '<i>I</i>', 'Italic (Ctrl/⌘+I) — use for book titles'],
+   ['underline', '<u>U</u>', 'Underline (Ctrl/⌘+U)'], ['sep'],
+   ['justifyCenter', 'Center', 'Center this line (for a title)'], ['justifyLeft', 'Left', 'Back to normal']
+  ].forEach(function (t) {
+    if (t[0] === 'sep') { tools.appendChild(el('span', 'sep')); return; }
+    var b = el('button', 'tool' + (t[0].indexOf('justify') === 0 ? ' wide' : ''));
+    b.type = 'button'; b.innerHTML = t[1]; b.title = t[2]; b.setAttribute('data-cmd', t[0]);
+    b.addEventListener('mousedown', function (e) { e.preventDefault(); });
+    b.addEventListener('click', function () {
+      if (ta.readOnly) return;
+      ta.focus(); try { document.execCommand(t[0], false, null); } catch (e) {}
+      ta.dispatchEvent(new Event('input')); refreshTools();
+    });
+    tools.appendChild(b);
+  });
+  ed.appendChild(tools);
+  var ta = makeEditor(state.essay);
   ed.appendChild(ta);
+  function refreshTools() {
+    Array.prototype.forEach.call(tools.querySelectorAll('.tool'), function (b) {
+      var on = false; try { on = document.queryCommandState(b.getAttribute('data-cmd')); } catch (e) {}
+      b.classList.toggle('on', !!on);
+    });
+  }
+  document.addEventListener('selectionchange', function () { if (document.activeElement === ta) refreshTools(); });
   var bar = el('div', 'bar');
   var cnt = el('span', 'count', wordCount(state.essay) + ' words');
   var btn = el('button', null, 'Submit & get feedback'); btn.id = 'submit';
@@ -348,7 +459,13 @@ function render() {
     try { localStorage.setItem('mg-draft-' + TOKEN, ta.value); } catch (e) {}
     LIVE.lastInput = Date.now(); liveSoon();
   });
-  ta.addEventListener('paste', function () { LIVE.pastes++; liveSoon(); });
+  // 붙여넣기는 글자만 (다른 곳의 글꼴·색이 섞이지 않게)
+  ta.addEventListener('paste', function (e) {
+    LIVE.pastes++;
+    var t = (e.clipboardData || window.clipboardData);
+    if (t) { e.preventDefault(); document.execCommand('insertText', false, t.getData('text/plain')); }
+    liveSoon();
+  });
   drawAsk();
   if (LIVE.lastReply) showReply(LIVE.lastReply, true);
   btn.addEventListener('click', submit);
@@ -360,7 +477,7 @@ function submit() {
   var st = document.getElementById('status');
   var text = ta.value;
   if (wordCount(text) < 20) { st.className = 'status err'; st.textContent = 'Your essay is too short.'; return; }
-  if (text.trim() === String(state.essay).trim()) {
+  if (text.trim() === htmlToMarkupFrom(state.essay).trim()) {
     st.className = 'status err'; st.textContent = 'You have not changed anything yet. Revise first, then submit.'; return;
   }
   btn.disabled = true; ta.readOnly = true;

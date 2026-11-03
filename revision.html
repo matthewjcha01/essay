@@ -247,6 +247,7 @@ function makeEditor(markup) {
 function renderGoalsOnly(box, goals) {
   box.appendChild(el('h2', null, 'Your revision goals'));
   box.appendChild(el('p', 'hint', 'Fix these 3 things in your essay. Then press Submit to get feedback.'));
+  var fr = state.formal ? state.firstReview : null;
   var t = el('div', 'score');
   if (state.formal) {
     if (state.firstScore != null) {
@@ -262,11 +263,33 @@ function renderGoalsOnly(box, goals) {
       (state.firstScore != null ? ' Your first draft scored ' + state.firstScore + ' / 12.' : '')));
   }
   box.appendChild(t);
+  if (state.formal && !fr) {
+    var wait = el('div', 'hint'); wait.id = 'frWait';
+    wait.innerHTML = '<span class="spin"></span>Your teacher’s comments on every paragraph are loading… (about 1 minute)';
+    box.appendChild(wait);
+    loadFirstReview();
+  }
+  if (fr && fr.topic_warning) box.appendChild(el('div', 'warn', '⚠ ' + fr.topic_warning));
+  if (fr && fr.annotations && fr.annotations.length) renderMarked(box, fr.annotations, state.essay);
+  if (fr) box.appendChild(el('h3', null, 'Your goals'));
   goals.forEach(function (g, i) {
     var d = el('div', 'goal');
     d.appendChild(el('div', 'g', (i + 1) + '. ' + g));
+    var fg = fr && fr.goals && fr.goals[i];
+    if (fg) {
+      if (fg.reason) d.appendChild(el('div', 'reason', fg.reason));
+      var steps = (fg.how_to_fix || []).filter(function (x) { return x; });
+      if (steps.length) {
+        d.appendChild(el('div', 'fixlabel', 'How to fix'));
+        var ol = el('ol', 'fix');
+        steps.forEach(function (x) { ol.appendChild(el('li', null, x)); });
+        d.appendChild(ol);
+      }
+      if (fg.hint) d.appendChild(el('div', 'hintbox', '💡 ' + fg.hint));
+    }
     box.appendChild(d);
   });
+  if (fr && fr.one_last_thing) { box.appendChild(el('h3', null, 'Start here')); box.appendChild(el('div', 'last', fr.one_last_thing)); }
   if (state.grammar) {
     box.appendChild(el('h3', null, 'Grammar focus'));
     box.appendChild(el('p', null, state.grammar));
@@ -409,6 +432,22 @@ function noteLi(a) {
   var t = el('span', null, (a._at === -1 && a.quote ? '“' + a.quote + '” — ' : '') + (a.note || ''));
   li.appendChild(t);
   return li;
+}
+
+var frLoading = false;
+function loadFirstReview() {
+  if (frLoading) return; frLoading = true;
+  call('revFirstReview', [TOKEN], function (fr) {
+    frLoading = false;
+    if (!fr || state.feedback) { var w = document.getElementById('frWait'); if (w) w.remove(); return; }
+    state.firstReview = fr;
+    // 학생이 쓰던 글은 그대로 두고 왼쪽만 다시 그림
+    var box = document.getElementById('fb');
+    if (box) { box.innerHTML = ''; renderGoalsOnly(box, state.goals); box.classList.add('flash'); }
+  }, function () {
+    frLoading = false;
+    var w = document.getElementById('frWait'); if (w) w.textContent = 'Could not load the comments. Reload the page to try again.';
+  });
 }
 
 function renderPending(box) {

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<script>window.API_URL = "https://script.google.com/macros/s/AKfycbw8-enc6s-CPiL4S_m-06F3BWMsua1hWXfLL49PLvIE8ZR_fdlfSOujVCbzmvApOrg6/exec";</script>
+<script>window.API_URL = "https://script.google.com/macros/s/AKfycbyZVv25-zBxV0-CCebo2sy9l4cRX0QmpOkS1VW5pK2IYeSWTReGFhfjVoPgspVn-uhv-g/exec";</script>
 <title>Mind Grove Revision</title>
 <style>
   :root {
@@ -94,11 +94,25 @@
   .center { text-align: center; padding: 60px 16px; color: var(--muted); }
   .flash { animation: f 1.2s ease-out; }
   @keyframes f { from { background: var(--accent-soft); } to { background: var(--card); } }
+  /* 선생님께 질문 · 답장 */
+  .askbtn { background: var(--card); color: var(--accent); border: 1px solid var(--accent); padding: 10px 16px; min-height: 46px; }
+  .askbtn.waiting { background: var(--mid-bg); color: var(--mid); border-color: var(--mid); }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .askbox { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .askbox input { flex: 1; min-width: 180px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: inherit; }
+  .askbox button { padding: 10px 16px; min-height: 0; }
+  .askbox .ghost { background: var(--card); color: var(--muted); border: 1px solid var(--line); }
+  .reply { display: flex; gap: 10px; align-items: flex-start; background: var(--mid-bg); border: 1px solid #F0D3A3;
+           border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+  .reply .rlabel { font-size: 12px; font-weight: 700; color: var(--mid); text-transform: uppercase; letter-spacing: .05em; }
+  .reply .rx { margin-left: auto; background: none; color: var(--muted); padding: 0 6px; min-height: 0; font-size: 18px; }
   /* 폰처럼 아주 좁은 화면에서만 위아래로 */
   @media (max-width: 639px) {
     .grid { grid-template-columns: 1fr; }
     textarea { min-height: 55vh; }
     button { width: 100%; }
+    .btns { width: 100%; }
+    .reply .rx, .askbox button { width: auto; }
   }
 </style>
 </head>
@@ -247,11 +261,12 @@ var pollTimer = null;
 function startPolling() {
   if (pollTimer) return;
   pollTimer = setInterval(function () {
-    call('getPageData', [TOKEN], function (data) {
+    call('revGetPageData', [TOKEN], function (data) {
       if (data && !data.pending) {
         clearInterval(pollTimer); pollTimer = null;
         state = data; render();
         document.getElementById('fb').classList.add('flash');
+        liveSend();
       }
     });
   }, 20000);
@@ -284,19 +299,43 @@ function render() {
 
   var ed = el('section', 'panel editor');
   ed.appendChild(el('h2', null, 'Your essay'));
+  var rb = el('div', 'reply'); rb.id = 'replyBar'; rb.style.display = 'none';
+  var rbt = el('div');
+  rbt.appendChild(el('div', 'rlabel', 'From Mr. Cha'));
+  var rbm = el('div'); rbm.id = 'replyMsg'; rbt.appendChild(rbm);
+  rb.appendChild(rbt);
+  var rx = el('button', 'rx', '×'); rx.title = 'Close';
+  rx.onclick = function () { rb.style.display = 'none'; LIVE.lastReply = ''; };
+  rb.appendChild(rx);
+  ed.appendChild(rb);
   var ta = el('textarea'); ta.id = 'essay'; ta.value = state.essay; ta.spellcheck = false;
   ed.appendChild(ta);
   var bar = el('div', 'bar');
   var cnt = el('span', 'count', wordCount(state.essay) + ' words');
   var btn = el('button', null, 'Submit & get feedback'); btn.id = 'submit';
-  bar.appendChild(cnt); bar.appendChild(btn);
+  var btns = el('div', 'btns');
+  var ask = el('button', 'askbtn'); ask.id = 'askBtn'; ask.type = 'button';
+  btns.appendChild(ask); btns.appendChild(btn);
+  bar.appendChild(cnt); bar.appendChild(btns);
   ed.appendChild(bar);
+  var ab = el('div', 'askbox'); ab.id = 'askBox'; ab.style.display = 'none';
+  var ai = el('input'); ai.id = 'askIn'; ai.maxLength = 200;
+  ai.placeholder = 'What do you want to ask? (English, optional)';
+  var as = el('button', null, 'Send'); as.type = 'button';
+  var ac = el('button', 'ghost', 'Cancel'); ac.type = 'button';
+  ab.appendChild(ai); ab.appendChild(as); ab.appendChild(ac);
+  ed.appendChild(ab);
+  ask.onclick = askClick; as.onclick = askSend; ac.onclick = function () { ab.style.display = 'none'; };
+  ai.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); askSend(); }
+    else if (e.key === 'Escape') ab.style.display = 'none';
+  });
   var st = el('div', 'status'); st.id = 'status';
   ed.appendChild(st);
   if (state.pending) {
     ta.readOnly = true; btn.style.display = 'none';
   } else if (state.done) {
-    ta.readOnly = true; btn.style.display = 'none';
+    ta.readOnly = true; btn.style.display = 'none'; ask.style.display = 'none';
     ed.appendChild(el('div', 'done', state.formal
       ? 'Finished! Your final score is ' + state.score + ' (' + state.letter + ').'
       : 'Finished! You reached ' + state.score + ' / 12. Great work — show your teacher.'));
@@ -307,7 +346,11 @@ function render() {
   ta.addEventListener('input', function () {
     cnt.textContent = wordCount(ta.value) + ' words';
     try { localStorage.setItem('mg-draft-' + TOKEN, ta.value); } catch (e) {}
+    LIVE.lastInput = Date.now(); liveSoon();
   });
+  ta.addEventListener('paste', function () { LIVE.pastes++; liveSoon(); });
+  drawAsk();
+  if (LIVE.lastReply) showReply(LIVE.lastReply, true);
   btn.addEventListener('click', submit);
 }
 
@@ -323,7 +366,7 @@ function submit() {
   btn.disabled = true; ta.readOnly = true;
   st.className = 'status';
   st.innerHTML = '<span class="spin"></span>Reading your essay… this takes about 30 seconds. Do not close this page.';
-  call('submitEssay', [TOKEN, text], function (res) {
+  call('revSubmit', [TOKEN, text], function (res) {
       state.feedback = res.feedback || null; state.count = res.count; state.essay = text;
       state.score = res.score; state.done = res.done; if (res.passScore) state.passScore = res.passScore;
       state.pending = !!res.pending; state.letter = res.letter || ''; state.teacherNote = ''; state.returned = false;
@@ -336,6 +379,8 @@ function submit() {
       var s2 = document.getElementById('status');
       if (state.pending) s2.textContent = 'Submitted! Your teacher will check it.';
       else if (!state.done) s2.textContent = 'Submitted! Read the feedback, then keep revising.';
+      if (state.done) LIVE.asking = false;
+      liveSend();
     }, function (err) {
       btn.disabled = false; ta.readOnly = false;
       st.className = 'status err';
@@ -343,7 +388,112 @@ function submit() {
     });
 }
 
-call('getPageData', [TOKEN], function (data) {
+// ── 실시간: 선생님 수업 모니터로 보내기 ──
+//   고치는 중이면 1.5초 뒤(최대 5초마다), 아무것도 안 해도 15초마다, 질문 중이면 3.5초마다.
+var LIVE = { busy: false, again: false, t: null, lastInput: Date.now(), lastSent: 0, started: false,
+             ok: false, asking: false, askSend: undefined, replyT: 0, lastReply: '',
+             pastes: 0, aways: 0, hiddenAt: 0 };
+var KO = /[ᄀ-ᇿ㄰-㆏가-힯]/g;
+
+function livePayload() {
+  var ta = document.getElementById('essay');
+  var text = ta ? ta.value : (state ? state.essay : '');
+  var fb = state && state.feedback;
+  return {
+    text: text, wc: wordCount(text), base: state ? String(state.essay || '') : '',
+    idle: Math.round((Date.now() - LIVE.lastInput) / 1000),
+    pastes: LIVE.pastes, aways: LIVE.aways,
+    score: state && state.score != null ? state.score : null, letter: state ? state.letter || '' : '',
+    pass: state ? state.passScore || 0 : 0, count: state ? state.count || 0 : 0,
+    formal: !!(state && state.formal), pending: !!(state && state.pending), done: !!(state && state.done),
+    goals: fb && fb.goals ? fb.goals.map(function (g) { return { v: g.verdict, t: g.goal }; }) : null
+  };
+}
+function liveSoon() {
+  if (!LIVE.started) return;
+  clearTimeout(LIVE.t);
+  LIVE.t = setTimeout(liveSend, Date.now() - LIVE.lastSent > 5000 ? 0 : 1500);
+}
+function liveSend() {
+  if (!LIVE.started || !state) return;
+  if (LIVE.busy) { LIVE.again = true; return; }
+  if (!navigator.onLine) return;
+  LIVE.busy = true; LIVE.lastSent = Date.now();
+  var p = livePayload();
+  var sentAsk = LIVE.askSend; LIVE.askSend = undefined;
+  if (sentAsk !== undefined) p.ask = sentAsk;
+  call('revLive', [TOKEN, JSON.stringify(p)], function (r) {
+    LIVE.busy = false;
+    if (r && r.ok) {
+      if (!LIVE.ok) { LIVE.ok = true; drawAsk(); }
+      if (r.reply && r.reply.t > LIVE.replyT) {
+        var fresh = LIVE.replyT > 0 || LIVE.asking || Date.now() - r.reply.t < 10 * 60000;
+        LIVE.replyT = r.reply.t;
+        try { localStorage.setItem('mg-rep-' + TOKEN, String(r.reply.t)); } catch (e) {}
+        if (fresh) showReply(r.reply.msg);
+      }
+      // 선생님이 답장했거나 '확인'을 눌렀으면 기다림 끝
+      if (LIVE.asking && !r.ask && sentAsk === undefined && LIVE.askSend === undefined) { LIVE.asking = false; drawAsk(); }
+    } else if (sentAsk !== undefined && LIVE.askSend === undefined) LIVE.askSend = sentAsk;
+    if (LIVE.again) { LIVE.again = false; liveSoon(); }
+  }, function () {
+    LIVE.busy = false;
+    if (sentAsk !== undefined && LIVE.askSend === undefined) LIVE.askSend = sentAsk;
+  });
+}
+function liveStart() {
+  if (LIVE.started) return;
+  LIVE.started = true;
+  try { LIVE.replyT = Number(localStorage.getItem('mg-rep-' + TOKEN)) || 0; } catch (e) {}
+  liveSend();
+  setInterval(function () {
+    if (LIVE.asking || LIVE.askSend !== undefined) { if (Date.now() - LIVE.lastSent > 3500) liveSend(); }
+    else if (Date.now() - LIVE.lastSent > 15000) liveSend();
+  }, 1000);
+  // 5초 이상 다른 화면에 갔다 오면 '화면 이탈' 1회 (선생님 화면 참고용)
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) LIVE.hiddenAt = Date.now();
+    else if (LIVE.hiddenAt) { if (Date.now() - LIVE.hiddenAt >= 5000) LIVE.aways++; LIVE.hiddenAt = 0; liveSoon(); }
+  });
+}
+function drawAsk() {
+  var b = document.getElementById('askBtn');
+  if (!b) return;
+  b.style.visibility = LIVE.ok ? 'visible' : 'hidden';
+  b.classList.toggle('waiting', LIVE.asking);
+  b.textContent = LIVE.asking ? '⏳ Waiting for Mr. Cha…' : '✋ Ask Mr. Cha';
+  b.title = LIVE.asking ? 'Click to cancel your question' : 'Mr. Cha will look at your essay now';
+}
+function askClick() {
+  if (LIVE.asking) {             // 다시 누르면 질문 취소
+    LIVE.asking = false; LIVE.askSend = false; drawAsk(); liveSend();
+    status('Your question was canceled.'); return;
+  }
+  var box = document.getElementById('askBox');
+  box.style.display = 'flex';
+  var i = document.getElementById('askIn'); i.value = ''; i.focus();
+}
+function askSend() {
+  var q = document.getElementById('askIn').value.replace(KO, '').replace(/\s+/g, ' ').trim();
+  LIVE.asking = true; LIVE.askSend = q; drawAsk();
+  document.getElementById('askBox').style.display = 'none';
+  liveSend();
+  status('Sent! Keep revising — Mr. Cha will look at your essay.');
+}
+function showReply(msg, quiet) {
+  LIVE.lastReply = msg;
+  var bar = document.getElementById('replyBar');
+  if (!bar) return;
+  document.getElementById('replyMsg').textContent = msg;
+  bar.style.display = 'flex';
+  if (!quiet) { bar.classList.remove('flash'); void bar.offsetWidth; bar.classList.add('flash'); }
+}
+function status(msg) {
+  var s = document.getElementById('status');
+  if (s) { s.className = 'status'; s.textContent = msg; }
+}
+
+call('revGetPageData', [TOKEN], function (data) {
     if (!data) {
       document.getElementById('app').innerHTML =
         '<div class="center">This link is not valid. Please ask your teacher for your link.</div>';
@@ -355,6 +505,7 @@ call('getPageData', [TOKEN], function (data) {
       if (saved && saved.trim() && saved !== state.essay) state.essayUnsaved = saved;
     } catch (e) {}
     render();
+    liveStart();
     if (state.essayUnsaved) {
       document.getElementById('essay').value = state.essayUnsaved;
       document.getElementById('status').textContent = 'We restored the changes you had not submitted yet.';

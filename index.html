@@ -419,7 +419,10 @@
     MINE_SHOWN = mineAll ? MINE : MINE.slice(0, 5);
     $('myList').innerHTML = MINE_SHOWN.map(function (x, i) {
       var isNew = x.kind === 'ready' && !seen[x.id];
-      var right = x.kind === 'ready'
+      var right = x.kind === 'revise'
+        ? (x.상태 === 'check' ? '<span class="tag waiting">Goal reached · teacher checking</span>'
+           : '<button class="act" data-i="' + i + '" data-act="rev">' + (x.상태 === 'done' ? 'View' : 'Revise') + '</button>')
+        : x.kind === 'ready'
         ? '<button class="act" data-i="' + i + '" data-act="view">View feedback</button>'
         : x.kind === 'writing'
         ? '<button class="act soft" data-i="' + i + '" data-act="go">Continue</button>'
@@ -437,6 +440,7 @@
     if (!b) return;
     var x = MINE_SHOWN[+b.getAttribute('data-i')];
     if (!x) return;
+    if (b.getAttribute('data-act') === 'rev') { window.location.href = x.url; return; }
     if (b.getAttribute('data-act') === 'view') openFeedback(x);
     else continueEssay(x);
   };
@@ -653,7 +657,13 @@
     show('doneView');
     $('doneTitle').textContent = d.과제;
     var link = $('doneLink'); link.classList.add('hidden');
-    if (d.공개) {
+    link.textContent = 'View feedback'; link.target = '_blank';
+    if (d.revise) {
+      $('doneIcon').textContent = '✓';
+      $('doneMsg').textContent = 'Submitted! Open your revision page to see your score and comments. Keep revising until you reach 80.';
+      link.textContent = 'Start revising →'; link.href = d.revise; link.target = '_self';
+      link.classList.remove('hidden');
+    } else if (d.공개) {
       $('doneIcon').textContent = '✉';
       $('doneMsg').textContent = 'Your feedback is ready.';
       link.href = d.url; link.classList.remove('hidden');
@@ -1227,7 +1237,7 @@
       if (r.ok) {
         locked = true; LS.del(LSKEY); dirty = false;
         liveDone();
-        showDone({ 과제: S.과제, 상태: r.상태, 공개: false });
+        showDone({ 과제: S.과제, 상태: r.상태, 공개: false, revise: r.revise || '' });
       } else {
         $('finishBtn').disabled = false;
         if (r.relogin) { needRelogin(function () { doFinish(auto); }); return; }

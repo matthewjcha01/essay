@@ -245,8 +245,13 @@ function makeEditor(markup) {
 }
 
 function renderGoalsOnly(box, goals) {
-  box.appendChild(el('h2', null, 'Your revision goals'));
-  box.appendChild(el('p', 'hint', 'Fix these 3 things in your essay. Then press Submit to get feedback.'));
+  if (state.full) {
+    box.appendChild(el('h2', null, 'Your first draft'));
+    box.appendChild(el('p', 'hint', 'Read the comments on every paragraph. Fix the red and yellow parts in your essay, then press Submit to get a new score.'));
+  } else {
+    box.appendChild(el('h2', null, 'Your revision goals'));
+    box.appendChild(el('p', 'hint', 'Fix these 3 things in your essay. Then press Submit to get feedback.'));
+  }
   var fr = state.formal ? state.firstReview : null;
   var t = el('div', 'score');
   if (state.formal) {
@@ -271,7 +276,7 @@ function renderGoalsOnly(box, goals) {
   }
   if (fr && fr.topic_warning) box.appendChild(el('div', 'warn', '⚠ ' + fr.topic_warning));
   if (fr && fr.annotations && fr.annotations.length) renderMarked(box, fr.annotations, state.essay);
-  if (fr) box.appendChild(el('h3', null, 'Your goals'));
+  if (fr && goals.length) box.appendChild(el('h3', null, 'Your goals'));
   goals.forEach(function (g, i) {
     var d = el('div', 'goal');
     d.appendChild(el('div', 'g', (i + 1) + '. ' + g));
@@ -293,6 +298,13 @@ function renderGoalsOnly(box, goals) {
   if (state.grammar) {
     box.appendChild(el('h3', null, 'Grammar focus'));
     box.appendChild(el('p', null, state.grammar));
+  } else if (state.full && fr && fr.grammar && fr.grammar.focus) {
+    box.appendChild(el('h3', null, 'Grammar check: ' + fr.grammar.focus));
+    var gl = (fr.grammar.remaining || []).filter(function (x) { return x; });
+    if (gl.length) {
+      box.appendChild(el('p', 'hint', 'Find these in your essay and fix them yourself:'));
+      var gu = el('ul'); gl.forEach(function (t) { gu.appendChild(el('li', null, '“' + t + '”')); }); box.appendChild(gu);
+    }
   }
 }
 
@@ -330,7 +342,8 @@ function renderFeedback(box, fb, count) {
 
   if (state.formal && fb.annotations && fb.annotations.length) renderMarked(box, fb.annotations, state.essay);
 
-  box.appendChild(el('h3', null, '1. Your goals'));
+  if (fb.since_last) box.appendChild(el('div', 'since', 'Since last time: ' + fb.since_last));
+  if ((fb.goals || []).length) box.appendChild(el('h3', null, '1. Your goals'));
   var labels = { 'ACHIEVED': 'Achieved', 'PARTLY': 'Partly', 'NOT YET': 'Not yet' };
   (fb.goals || []).forEach(function (g, i) {
     var v = String(g.verdict || '').toUpperCase();
@@ -363,6 +376,7 @@ function renderFeedback(box, fb, count) {
 
   var gr = fb.grammar || {};
   var rem = (gr.remaining || []).filter(function (x) { return x; });
+  if (state.full && !gr.focus && !rem.length) return;
   box.appendChild(el('h3', null, '4. Grammar check' + (gr.focus ? ': ' + gr.focus : '')));
   if (rem.length) {
     box.appendChild(el('p', 'hint', 'Find these in your essay and fix them yourself:'));
@@ -441,6 +455,8 @@ function loadFirstReview() {
     frLoading = false;
     if (!fr || state.feedback) { var w = document.getElementById('frWait'); if (w) w.remove(); return; }
     state.firstReview = fr;
+    if (fr.firstScore != null) { state.firstScore = fr.firstScore; state.firstLetter = fr.firstLetter || ''; }
+    if (fr.pending) { state.pending = true; render(); return; }
     // 학생이 쓰던 글은 그대로 두고 왼쪽만 다시 그림
     var box = document.getElementById('fb');
     if (box) { box.innerHTML = ''; renderGoalsOnly(box, state.goals); box.classList.add('flash'); }
@@ -452,8 +468,8 @@ function loadFirstReview() {
 
 function renderPending(box) {
   var w = el('div', 'waitbox');
-  w.appendChild(el('div', 'w1', 'Your teacher is checking your essay'));
-  w.appendChild(el('div', 'w2', 'This draft reached the level for a teacher check. Your score and feedback will appear here when your teacher is done.'));
+  w.appendChild(el('div', 'w1', '🎉 You reached your goal!'));
+  w.appendChild(el('div', 'w2', 'Your essay reached ' + (state.passScore || 80) + ' points. Your teacher will check it and give you final feedback. It will appear here when your teacher is done.'));
   w.appendChild(el('p', 'hint', 'This page updates by itself. You can keep it open.'));
   box.appendChild(w);
   startPolling();
@@ -483,7 +499,7 @@ function render() {
   left.appendChild(el('div', 'brand', 'Mind Grove · Revision'));
   left.appendChild(el('h1', null, state.name));
   head.appendChild(left);
-  head.appendChild(el('div', 'meta', state.cls + ' · Unit ' + state.unit +
+  head.appendChild(el('div', 'meta', state.cls + (state.full ? ' · ' : ' · Unit ') + state.unit +
     (state.count ? ' · ' + state.count + ' submitted' : '')));
   app.appendChild(head);
 
@@ -627,7 +643,7 @@ function submit() {
       fb.scrollTop = 0;
       if (window.innerWidth < 640) fb.scrollIntoView({ behavior: 'smooth', block: 'start' });
       var s2 = document.getElementById('status');
-      if (state.pending) s2.textContent = 'Submitted! Your teacher will check it.';
+      if (state.pending) s2.textContent = 'You reached your goal! Your teacher will give you final feedback.';
       else if (!state.done) s2.textContent = 'Submitted! Read the feedback, then keep revising.';
       if (state.done) LIVE.asking = false;
       liveSend();

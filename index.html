@@ -421,6 +421,7 @@
       var isNew = x.kind === 'ready' && !seen[x.id];
       var right = x.kind === 'revise'
         ? (x.상태 === 'check' ? '<span class="tag waiting">Goal reached · teacher checking</span>'
+           : x.상태 === 'first' ? '<span class="tag waiting">Teacher checking your comments</span>'
            : '<button class="act" data-i="' + i + '" data-act="rev">' + (x.상태 === 'done' ? 'View' : 'Revise') + '</button>')
         : x.kind === 'ready'
         ? '<button class="act" data-i="' + i + '" data-act="view">View feedback</button>'
@@ -660,8 +661,8 @@
     link.textContent = 'View feedback'; link.target = '_blank';
     if (d.revise) {
       $('doneIcon').textContent = '✓';
-      $('doneMsg').textContent = 'Submitted! Open your revision page to see your score and comments. Keep revising until you reach 80.';
-      link.textContent = 'Start revising →'; link.href = d.revise; link.target = '_self';
+      $('doneMsg').textContent = 'Submitted! Your teacher will check the comments on your essay first. You will get an email when your revision page is ready. Then revise until you reach 80.';
+      link.textContent = 'Open my revision page →'; link.href = d.revise; link.target = '_self';
       link.classList.remove('hidden');
     } else if (d.공개) {
       $('doneIcon').textContent = '✉';

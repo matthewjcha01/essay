@@ -101,6 +101,9 @@
   .doc p { margin: 0; text-indent: .5in; min-height: 2em; }
   .doc p.c, .doc p[style*="center"] { text-indent: 0; text-align: center; }
   .doc[contenteditable="false"] { background: #FAFAF7; }
+  .rules { margin-top: 10px; padding: 8px 12px; border: 1px solid #e3e6ea; border-radius: 8px; background: #f8f9fb; font-size: 13px; color: #4a5058; }
+  .rules .rt { font-weight: 600; margin-bottom: 2px; }
+  .rules ul { margin: 0; padding-left: 18px; }
   .bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
   .count { color: var(--muted); font-size: 14px; }
   button {
@@ -273,6 +276,12 @@ function renderGoalsOnly(box, goals) {
     wait.innerHTML = '<span class="spin"></span>Your teacher’s comments on every paragraph are loading… (about 1 minute)';
     box.appendChild(wait);
     loadFirstReview();
+  }
+  if (fr && state.teacherNote) {
+    var tn0 = el('div', 'tnote');
+    tn0.appendChild(el('div', 'label', 'From your teacher'));
+    tn0.appendChild(el('div', null, state.teacherNote));
+    box.appendChild(tn0);
   }
   if (fr && fr.topic_warning) box.appendChild(el('div', 'warn', '⚠ ' + fr.topic_warning));
   if (fr && fr.annotations && fr.annotations.length) renderMarked(box, fr.annotations, state.essay);
@@ -453,6 +462,7 @@ function loadFirstReview() {
   if (frLoading) return; frLoading = true;
   call('revFirstReview', [TOKEN], function (fr) {
     frLoading = false;
+    if (fr && fr.waiting) { state.firstPending = true; render(); return; }
     if (!fr || state.feedback) { var w = document.getElementById('frWait'); if (w) w.remove(); return; }
     state.firstReview = fr;
     if (fr.firstScore != null) { state.firstScore = fr.firstScore; state.firstLetter = fr.firstLetter || ''; }
@@ -464,6 +474,15 @@ function loadFirstReview() {
     frLoading = false;
     var w = document.getElementById('frWait'); if (w) w.textContent = 'Could not load the comments. Reload the page to try again.';
   });
+}
+
+function renderFirstPending(box) {
+  var w = el('div', 'waitbox');
+  w.appendChild(el('div', 'w1', 'Your teacher is checking your comments'));
+  w.appendChild(el('div', 'w2', 'Your essay got comments on every paragraph. Your teacher is reading them first. They will appear here when your teacher is done, and you will get an email.'));
+  w.appendChild(el('p', 'hint', 'This page updates by itself. You can keep it open.'));
+  box.appendChild(w);
+  startPolling();
 }
 
 function renderPending(box) {
@@ -480,7 +499,7 @@ function startPolling() {
   if (pollTimer) return;
   pollTimer = setInterval(function () {
     call('revGetPageData', [TOKEN], function (data) {
-      if (data && !data.pending) {
+      if (data && !data.pending && !data.firstPending) {
         clearInterval(pollTimer); pollTimer = null;
         state = data; render();
         document.getElementById('fb').classList.add('flash');
@@ -511,6 +530,7 @@ function render() {
   var grid = el('div', 'grid');
   var fbBox = el('section', 'panel fb'); fbBox.id = 'fb';
   if (state.pending) renderPending(fbBox);
+  else if (state.firstPending) renderFirstPending(fbBox);
   else if (state.feedback) renderFeedback(fbBox, state.feedback, state.count);
   else renderGoalsOnly(fbBox, state.goals);
   grid.appendChild(fbBox);
@@ -574,7 +594,19 @@ function render() {
   });
   var st = el('div', 'status'); st.id = 'status';
   ed.appendChild(st);
-  if (state.pending) {
+  var lim = state.limit || {};
+  if (!lim.off && lim.perDay && !state.done && !state.pending && !state.firstPending) {
+    var rules = el('div', 'rules');
+    rules.appendChild(el('div', 'rt', 'Submission rules'));
+    var ru = el('ul');
+    ru.appendChild(el('li', null, 'Wait ' + lim.gapMin + ' minutes between submissions.' +
+      (lim.nextAt && lim.nextAt > Date.now() ? ' Next submission: ' + new Date(lim.nextAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + '.' : '')));
+    ru.appendChild(el('li', null, 'Up to ' + lim.perDay + ' submissions a day. Left today: ' + lim.left + '.'));
+    ru.appendChild(el('li', null, 'Change at least ' + lim.minWords + ' words each time.'));
+    rules.appendChild(ru);
+    ed.appendChild(rules);
+  }
+  if (state.pending || state.firstPending) {
     ta.readOnly = true; btn.style.display = 'none';
   } else if (state.done) {
     ta.readOnly = true; btn.style.display = 'none'; ask.style.display = 'none';

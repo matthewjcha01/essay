@@ -611,7 +611,8 @@ function render() {
   } else if (state.done) {
     ta.readOnly = true; btn.style.display = 'none'; ask.style.display = 'none';
     ed.appendChild(el('div', 'done', state.formal
-      ? 'Finished! Your final score is ' + state.score + ' (' + state.letter + ').'
+      ? 'Finished! Your final score is ' + state.score + ' (' + state.letter + ').' +
+        (state.full ? ' Read your final feedback on your essay page: My essays → View feedback.' : '')
       : 'Finished! You reached ' + state.score + ' / 12. Great work — show your teacher.'));
   }
   grid.appendChild(ed);

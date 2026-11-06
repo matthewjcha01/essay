@@ -832,7 +832,9 @@ function status(msg) {
 call('revGetPageData', [TOKEN], function (data) {
     if (!data) {
       document.getElementById('app').innerHTML =
-        '<div class="center">This link is not valid. Please ask your teacher for your link.</div>';
+        '<div class="center">This link does not work anymore.<br><br>' +
+        'Go to <a href="https://matthewjcha01.github.io/essay/">matthewjcha01.github.io/essay</a>, log in, ' +
+        'and open your essay from <b>My essays</b>.</div>';
       return;
     }
     state = data;

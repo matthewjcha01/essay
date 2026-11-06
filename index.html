@@ -123,6 +123,9 @@
     padding: 8px 0; border-bottom: 1px solid #f0f1f3; font-size: 14px; }
   .my:last-child { border-bottom: 0; }
   .my .name { min-width: 0; overflow-wrap: anywhere; }
+  .my .due { display: block; font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .my .due.soon { color: #9A5B00; font-weight: 600; }
+  .my .due.past { color: #B3261E; font-weight: 600; }
   .tag { font-size: 12px; border-radius: 10px; padding: 2px 8px; white-space: nowrap; }
   .tag.waiting { background: #f1f3f4; color: var(--muted); }
   .tag.new { background: #e6f4ea; color: var(--good); font-weight: 600; margin-left: 4px; }
@@ -419,7 +422,10 @@
     MINE_SHOWN = mineAll ? MINE : MINE.slice(0, 5);
     $('myList').innerHTML = MINE_SHOWN.map(function (x, i) {
       var isNew = x.kind === 'ready' && !seen[x.id];
-      var right = x.kind === 'revise'
+      var past = x.kind === 'revise' && x.due && x.due.closed && (x.상태 === 'revise' || x.상태 === 'first');
+      var right = past
+        ? '<button class="act soft" data-i="' + i + '" data-act="rev">View</button>'
+        : x.kind === 'revise'
         ? (x.상태 === 'check' ? '<span class="tag waiting">Goal reached · teacher checking</span>'
            : x.상태 === 'first' ? '<span class="tag waiting">Teacher checking your comments</span>'
            : '<button class="act" data-i="' + i + '" data-act="rev">' + (x.상태 === 'done' ? 'View' : 'Revise') + '</button>')
@@ -429,11 +435,24 @@
         ? '<button class="act soft" data-i="' + i + '" data-act="go">Continue</button>'
         : '<span class="tag waiting">Feedback coming</span>';
       return '<div class="my"><span class="name">' + esc(x.과제) +
-             (isNew ? '<span class="tag new">New</span>' : '') + '</span>' + right + '</div>';
+             (isNew ? '<span class="tag new">New</span>' : '') + dueLine(x) + '</span>' + right + '</div>';
     }).join('');
     var more = $('myMore');
     more.classList.toggle('hidden', MINE.length <= 5);
     more.textContent = mineAll ? 'Show less' : 'Show all (' + MINE.length + ')';
+  }
+  // 마감일 줄 (고쳐 쓰는 중인 원서 에세이만). due 가 없으면(옛 서버·Pathways) 아무것도 안 보임
+  function dueLine(x) {
+    var d = x.due;
+    if (x.kind !== 'revise' || !d || (x.상태 !== 'revise' && x.상태 !== 'first')) return '';
+    if (!d.at) return '<span class="due">Due: Open</span>';
+    if (d.closed) return '<span class="due past">Past due: ' + esc(d.text) + '</span>';
+    var left = d.at - Date.now(), h = Math.floor(left / 3600000);
+    if (left < 48 * 3600000) {
+      var t = left < 3600000 ? 'less than 1 hour left' : h < 24 ? h + (h === 1 ? ' hour' : ' hours') + ' left' : '1 day left';
+      return '<span class="due soon">Due: ' + esc(d.text) + ' · ' + t + '</span>';
+    }
+    return '<span class="due">Due: ' + esc(d.text) + '</span>';
   }
   $('myMore').onclick = function () { mineAll = !mineAll; drawMine(); };
   $('myList').onclick = function (e) {

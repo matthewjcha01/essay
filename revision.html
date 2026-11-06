@@ -53,6 +53,12 @@
   .waitbox .w2 { color: var(--ink); }
   .tnote { background: var(--mid-bg); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
   .tnote .label { color: var(--mid); }
+  .due { display: inline-block; font-size: 13px; font-weight: 600; border-radius: 999px; padding: 3px 10px;
+         background: var(--accent-soft); color: var(--accent); margin-top: 4px; }
+  .due.soon { background: var(--mid-bg); color: var(--mid); }
+  .due.past { background: var(--no-bg); color: var(--no); }
+  .closed { background: var(--no-bg); color: var(--no); border-radius: 10px; padding: 12px 14px; margin-top: 12px; }
+  .closed b { display: block; margin-bottom: 2px; }
   .done { background: var(--ok-bg); color: var(--ok); border-radius: 10px; padding: 12px 14px; font-weight: 700; margin-top: 12px; }
   h3 { font-size: 14px; margin: 20px 0 8px; color: var(--accent); text-transform: uppercase; letter-spacing: .05em; }
   .warn { background: var(--no-bg); color: var(--no); font-weight: 700; padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; }
@@ -509,6 +515,18 @@ function startPolling() {
   }, 20000);
 }
 
+// 마감일 표시: due 가 없으면(옛 서버·Pathways) 아무것도 안 보임
+function dueChip(due, goal) {
+  if (!due) return null;
+  var g = goal ? ' · Goal: ' + goal : '';
+  if (!due.at) return el('div', 'due', 'Due: Open' + g);
+  if (due.closed) return el('div', 'due past', 'Past due: ' + due.text);
+  var left = due.at - Date.now(), h = Math.floor(left / 3600000);
+  var soon = left < 48 * 3600000;
+  var tail = !soon ? '' : left < 3600000 ? ' · less than 1 hour left' : h < 24 ? ' · ' + h + (h === 1 ? ' hour' : ' hours') + ' left' : ' · 1 day left';
+  return el('div', 'due' + (soon ? ' soon' : ''), 'Due: ' + due.text + tail + g);
+}
+
 function render() {
   var app = document.getElementById('app');
   app.innerHTML = '';
@@ -518,8 +536,12 @@ function render() {
   left.appendChild(el('div', 'brand', 'Mind Grove · Revision'));
   left.appendChild(el('h1', null, state.name));
   head.appendChild(left);
-  head.appendChild(el('div', 'meta', state.cls + (state.full ? ' · ' : ' · Unit ') + state.unit +
+  var right = el('div');
+  right.appendChild(el('div', 'meta', state.cls + (state.full ? ' · ' : ' · Unit ') + state.unit +
     (state.count ? ' · ' + state.count + ' submitted' : '')));
+  var dc = dueChip(state.due, state.passScore);
+  if (dc && !state.done && !state.pending) right.appendChild(dc);
+  head.appendChild(right);
   app.appendChild(head);
 
   var p = el('div', 'prompt');
@@ -595,7 +617,8 @@ function render() {
   var st = el('div', 'status'); st.id = 'status';
   ed.appendChild(st);
   var lim = state.limit || {};
-  if (!lim.off && lim.perDay && !state.done && !state.pending && !state.firstPending) {
+  var closed = !!(state.due && state.due.closed);
+  if (!lim.off && lim.perDay && !state.done && !state.pending && !state.firstPending && !closed) {
     var rules = el('div', 'rules');
     rules.appendChild(el('div', 'rt', 'Submission rules'));
     var ru = el('ul');
@@ -608,6 +631,13 @@ function render() {
   }
   if (state.pending || state.firstPending) {
     ta.readOnly = true; btn.style.display = 'none';
+  } else if (closed && !state.done) {
+    ta.readOnly = true; btn.style.display = 'none';
+    var cb = el('div', 'closed');
+    cb.appendChild(el('b', null, 'The deadline has passed.'));
+    cb.appendChild(el('span', null, 'This essay was due ' + state.due.text + '. You cannot submit it now. ' +
+      'Your teacher will give you a new due date. You can still read your feedback.'));
+    ed.appendChild(cb);
   } else if (state.done) {
     ta.readOnly = true; btn.style.display = 'none'; ask.style.display = 'none';
     ed.appendChild(el('div', 'done', state.formal
@@ -685,6 +715,11 @@ function submit() {
       st.className = 'status err';
       var msg = String(err && err.message || err);
       if (msg.indexOf('LIMIT: ') === 0) st.textContent = msg.slice(7);
+      else if (msg.indexOf('CLOSED: ') === 0) {
+        st.textContent = msg.slice(8);
+        btn.style.display = 'none'; ta.readOnly = true;
+        if (state.due) state.due.closed = true;
+      }
       else st.textContent = 'Something went wrong. Your text is still here. Try again, or tell your teacher. (' + msg + ')';
     });
 }

@@ -414,6 +414,7 @@ function renderFeedback(box, fb, count) {
 
   var gr = fb.grammar || {};
   var rem = (gr.remaining || []).filter(function (x) { return x; });
+  if (newGoals) return;   // old grammar focus is done; the new one is shown with the new goals
   if (state.full && !gr.focus && !rem.length) return;
   box.appendChild(el('h3', null, '4. Grammar check' + (gr.focus ? ': ' + gr.focus : '')));
   if (rem.length) {

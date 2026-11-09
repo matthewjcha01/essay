@@ -357,8 +357,31 @@ function renderFeedback(box, fb, count) {
 
   if (state.formal && fb.annotations && fb.annotations.length) renderMarked(box, fb.annotations, state.essay);
 
+  // NGL: new goals (all 3 old goals reached, score not 10 yet) — show them first
+  var newGoals = null;
+  if (!state.formal) {
+    if (fb.new_goals && fb.new_goals.length) newGoals = fb.new_goals;
+    else if ((state.goals || []).length) {
+      var oldSet = (fb.goals || []).map(function (g) { return String(g.goal || '').trim(); }).join('|');
+      var nowSet = state.goals.map(function (g) { return String(g || '').trim(); }).join('|');
+      if (!(fb.goals || []).length || oldSet !== nowSet) newGoals = state.goals;
+    }
+  }
+  if (newGoals) {
+    box.appendChild(el('h3', null, 'Your NEW goals'));
+    box.appendChild(el('p', 'hint', 'You reached all 3 of your old goals. Fix these 3 things next, then press Submit.'));
+    newGoals.forEach(function (g, i) {
+      var nd = el('div', 'goal NOTYET');
+      nd.appendChild(el('div', 'g', 'Goal ' + (i + 1) + ': ' + g));
+      box.appendChild(nd);
+    });
+    var ngGram = fb.next_grammar || state.grammar;
+    if (ngGram) box.appendChild(el('div', 'hintbox', 'Grammar focus: ' + ngGram));
+    if ((fb.goals || []).length) box.appendChild(el('h3', null, 'Your old goals (done)'));
+  }
+
   if (fb.since_last) box.appendChild(el('div', 'since', 'Since last time: ' + fb.since_last));
-  if ((fb.goals || []).length) box.appendChild(el('h3', null, '1. Your goals'));
+  if ((fb.goals || []).length && !newGoals) box.appendChild(el('h3', null, '1. Your goals'));
   var labels = { 'ACHIEVED': 'Achieved', 'PARTLY': 'Partly', 'NOT YET': 'Not yet' };
   (fb.goals || []).forEach(function (g, i) {
     var v = String(g.verdict || '').toUpperCase();
@@ -693,6 +716,10 @@ function submit() {
     '. Do not close this page.';
   call('revSubmit', [TOKEN, text], function (res) {
       state.feedback = res.feedback || null; state.count = res.count; state.essay = text;
+      if (res.feedback && res.feedback.new_goals && res.feedback.new_goals.length) {
+        state.goals = res.feedback.new_goals.slice();
+        if (res.feedback.next_grammar) state.grammar = res.feedback.next_grammar;
+      }
       state.score = res.score; state.done = res.done; if (res.passScore) state.passScore = res.passScore;
       state.pending = !!res.pending; state.letter = res.letter || ''; state.teacherNote = ''; state.returned = false;
       if (state.limit && !state.limit.off) {

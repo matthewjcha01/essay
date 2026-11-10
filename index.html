@@ -427,6 +427,7 @@
         ? '<button class="act soft" data-i="' + i + '" data-act="rev">View</button>'
         : x.kind === 'revise'
         ? (x.상태 === 'check' ? '<span class="tag waiting">Goal reached · teacher checking</span>'
+           : x.상태 === 'closed' ? '<span class="tag waiting">Closed · final feedback coming</span>'
            : x.상태 === 'first' ? '<span class="tag waiting">Teacher checking your comments</span>'
            : '<button class="act" data-i="' + i + '" data-act="rev">' + (x.상태 === 'done' ? 'View' : 'Revise') + '</button>')
         : x.kind === 'ready'

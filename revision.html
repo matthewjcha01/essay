@@ -517,8 +517,13 @@ function renderFirstPending(box) {
 
 function renderPending(box) {
   var w = el('div', 'waitbox');
-  w.appendChild(el('div', 'w1', '🎉 You reached your goal!'));
-  w.appendChild(el('div', 'w2', 'Your essay reached ' + (state.passScore || 80) + ' points. Your teacher will check it and give you final feedback. It will appear here when your teacher is done.'));
+  if (state.closedByTeacher) {
+    w.appendChild(el('div', 'w1', 'Your teacher closed this essay'));
+    w.appendChild(el('div', 'w2', 'Your teacher will give you final feedback on the essay you submitted last. You cannot change it now. Your final feedback will appear in My essays → View feedback.'));
+  } else {
+    w.appendChild(el('div', 'w1', '🎉 You reached your goal!'));
+    w.appendChild(el('div', 'w2', 'Your essay reached ' + (state.passScore || 80) + ' points. Your teacher will check it and give you final feedback. It will appear here when your teacher is done.'));
+  }
   w.appendChild(el('p', 'hint', 'This page updates by itself. You can keep it open.'));
   box.appendChild(w);
   startPolling();

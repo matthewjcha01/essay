@@ -270,7 +270,7 @@ function renderGoalsOnly(box, goals) {
       t.appendChild(big0);
     }
     t.appendChild(el('div', 'parts', (state.firstScore != null ? 'Your score now. ' : '') +
-      'Goal: reach ' + (state.passScore || 80) + ' (B-), and your teacher will check your essay.'));
+      'Goal: reach ' + (state.passScore || 80) + ' (' + (state.passLetter || 'B-') + '), and your teacher will check your essay.'));
   } else {
     t.appendChild(el('div', 'big', String(state.passScore || 10)));
     t.appendChild(el('div', 'parts', 'Reach ' + (state.passScore || 10) + ' / 12 to finish.' +
@@ -339,7 +339,7 @@ function renderFeedback(box, fb, count) {
     sc2.appendChild(el('div', 'parts',
       'Intro ' + fb.score.intro + '/20 · Body ' + fb.score.body + '/40 · Conclusion ' + fb.score.conclusion +
       '/15 · Language ' + fb.score.language + '/25' +
-      (state.done ? '' : ' — reach ' + (state.passScore || 80) + ' (B-) for your teacher to check')));
+      (state.done ? '' : ' — reach ' + (state.passScore || 80) + ' (' + (state.passLetter || 'B-') + ') for your teacher to check')));
     box.appendChild(sc2);
   } else if (fb.score && fb.score.total != null) {
     var pass = fb.score.total >= (state.passScore || 10);
@@ -726,7 +726,7 @@ function submit() {
         state.goals = res.feedback.new_goals.slice();
         if (res.feedback.next_grammar) state.grammar = res.feedback.next_grammar;
       }
-      state.score = res.score; state.done = res.done; if (res.passScore) state.passScore = res.passScore;
+      state.score = res.score; state.done = res.done; if (res.passScore) state.passScore = res.passScore; if (res.passLetter) state.passLetter = res.passLetter;
       state.pending = !!res.pending; state.letter = res.letter || ''; state.teacherNote = ''; state.returned = false;
       if (state.limit && !state.limit.off) {
         state.limit.nextAt = Date.now() + (state.limit.gapMin || 10) * 60000;

@@ -1227,13 +1227,41 @@
                ok: false, asking: false, askSend: undefined, replyT: 0, started: false };
   function liveCount(kind) { var n = 0; (log.ev || []).forEach(function (a) { if (a[1] === kind) n++; }); return n; }
   // 모니터용 본문 — 학생 화면과 똑같이 빈 줄(빈 문단)까지 그대로
+  //   ★기울임·굵게·밑줄은 <i> <b> <u> 표시로 보냄 (선생님 모니터에 서식대로 보이게)
+  function liveLine(top) {
+    var runs = [];
+    function push(t, st) {
+      var l = runs[runs.length - 1];
+      if (l && l.b === st.b && l.i === st.i && l.u === st.u) l.t += t; else runs.push({ t: t, b: st.b, i: st.i, u: st.u });
+    }
+    function walk(n, st) {
+      if (n.nodeType === 3) { var t = n.data.replace(/\u00a0/g, ' ').replace(/\n/g, ' '); if (t) push(t, st); return; }
+      if (n.nodeType !== 1) return;
+      if (n.tagName === 'BR') { push('\n', st); return; }
+      var tag = n.tagName, cs = n.style || {};
+      var s2 = {
+        b: st.b || tag === 'B' || tag === 'STRONG' || cs.fontWeight === 'bold' || parseInt(cs.fontWeight, 10) >= 600 ? 1 : 0,
+        i: st.i || tag === 'I' || tag === 'EM' || cs.fontStyle === 'italic' ? 1 : 0,
+        u: st.u || tag === 'U' || (cs.textDecoration || '').indexOf('underline') !== -1 ||
+           (cs.textDecorationLine || '').indexOf('underline') !== -1 ? 1 : 0
+      };
+      for (var c = n.firstChild; c; c = c.nextSibling) walk(c, s2);
+    }
+    walk(top, { b: 0, i: 0, u: 0 });
+    return runs.map(function (r) {
+      var x = r.t.replace(/<(\/?(b|i|u|center))>/g, '‹$1›');
+      if (r.u) x = '<u>' + x + '</u>';
+      if (r.i) x = '<i>' + x + '</i>';
+      if (r.b) x = '<b>' + x + '</b>';
+      return x;
+    }).join('').replace(/\n+$/, '').replace(/\n+(<\/[biu]>)+$/, function (m) { return m.replace(/\n/g, ''); });
+  }
   function liveText() {
     var out = [];
     for (var n = ed.firstChild; n; n = n.nextSibling) {
       if (n.nodeType === 3) { if (n.data.trim()) out.push(n.data.replace(/\n/g, ' ')); continue; }
       if (n.nodeType !== 1) continue;
-      var t = (n.innerText || n.textContent || '').replace(/\u00a0/g, ' ').replace(/\n+$/, '');
-      out.push(t);
+      out.push(liveLine(n));
     }
     while (out.length && !out[out.length - 1].trim()) out.pop();   // 맨 끝 빈 줄만 정리
     return out.join('\n');

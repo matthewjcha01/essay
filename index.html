@@ -869,6 +869,7 @@
       return '<span class="br ' + c + '">' + m + '</span>';
     });
     h = h.replace(/⟦([^⟧]*)⟧/g, '<mark class="hl">$1</mark>');
+    h = h.replace(/⟪([^⟫]*)⟫/g, '<i>$1</i>');     // ★학생 글의 기울임 (책 제목 등)
     return '<p>' + h + '</p>';
   }
 

@@ -198,6 +198,54 @@ function wordCount(s) {
 // 저장된 글을 편집기에 넣었다 꺼낸 모양 (아무것도 안 고쳤는지 비교용)
 function htmlToMarkupFrom(m) { var d = document.createElement('div'); d.innerHTML = markupToHtml(m); d.style.cssText = 'position:absolute;left:-9999px'; document.body.appendChild(d); var r = htmlToMarkup(d); d.remove(); return r; }
 function plainText(s) { return String(s || '').replace(/<\/?(b|i|u|center)>/g, ''); }
+// ★학생 글의 기울임·굵게·밑줄을 코멘트 표시와 함께 보이기
+function esc(s) { return escH(s); }
+  // ★이탤릭·굵게·밑줄 보이기 — 학생 글의 <i> <b> <u> 표시를 서식대로 그리면서, 표시(mark)는 글자 위치로 덧씌움
+function parseRich(src) {
+  var txt = '', st = [], b = 0, i = 0, u = 0, re = /<(\/?)(b|i|u|strong|em|center)>/gi, last = 0, m;
+  function add(s) { for (var k = 0; k < s.length; k++) { txt += s.charAt(k); st.push((b > 0 ? 1 : 0) | (i > 0 ? 2 : 0) | (u > 0 ? 4 : 0)); } }
+  src = String(src || '').replace(/&nbsp;/g, ' ');
+  while ((m = re.exec(src))) {
+    add(src.slice(last, m.index)); last = re.lastIndex;
+    var d = m[1] ? -1 : 1, t = m[2].toLowerCase();
+    if (t === 'b' || t === 'strong') b = Math.max(0, b + d);
+    else if (t === 'i' || t === 'em') i = Math.max(0, i + d);
+    else if (t === 'u') u = Math.max(0, u + d);
+  }
+  add(src.slice(last));
+  return { t: txt, st: st };
+}
+// ranges: [{ s, e, open, close, after }] — 글자만 센 위치 기준
+function richHtml(src, ranges) {
+  var p = parseRich(src), out = '', cs = 0, cm = -1, n = p.t.length;
+  ranges = ranges || [];
+  function at(k) { for (var r = 0; r < ranges.length; r++) if (k >= ranges[r].s && k < ranges[r].e) return r; return -1; }
+  function openS(s) { return (s & 1 ? '<b>' : '') + (s & 2 ? '<i>' : '') + (s & 4 ? '<u>' : ''); }
+  function closeS(s) { return (s & 4 ? '</u>' : '') + (s & 2 ? '</i>' : '') + (s & 1 ? '</b>' : ''); }
+  for (var k = 0; k < n; k++) {
+    var s = p.st[k], mk = at(k);
+    if (k === 0 || s !== cs || mk !== cm) {
+      if (k > 0) { out += closeS(cs); if (cm >= 0) out += ranges[cm].close + (mk !== cm ? ranges[cm].after || '' : ''); }
+      if (mk >= 0) out += ranges[mk].open;
+      out += openS(s); cs = s; cm = mk;
+    }
+    out += esc(p.t.charAt(k));
+  }
+  if (n) { out += closeS(cs); if (cm >= 0) out += ranges[cm].close + (ranges[cm].after || ''); }
+  return out;
+}
+// 코멘트 인용을 글자 위치로 찾기 (겹치면 표시는 건너뜀)
+function findRange(plainText, quote, ranges) {
+  var q = String(quote || ''); if (!q) return -1;
+  var from = 0, at;
+  while ((at = plainText.indexOf(q, from)) !== -1) {
+    var hit = ranges.some(function (r) { return at < r.e && at + q.length > r.s; });
+    if (!hit) return at;
+    from = at + 1;
+  }
+  return -1;
+}
+
 function escH(s) { return String(s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
 function markupToHtml(m) {
   var lines = String(m || '').replace(/\r/g, '').split('\n');
@@ -451,7 +499,8 @@ function renderMarked(box, anns, essay) {
   var norm = function (t) { return String(t || '').replace(/[‘’]/g, "'").replace(/[“”]/g, '"'); };
   var paras = String(essay || '').split('\n').map(function (line) {
     var c = /^<center>[\s\S]*<\/center>$/.test(line);
-    return { c: c, t: plainText(line) };
+    var raw = c ? line.slice(8, -9) : line;
+    return { c: c, raw: raw, t: parseRich(raw).t };
   });
   // 빈 줄을 뺀 문단 번호 (AI 가 세는 방식)
   var real = []; paras.forEach(function (p, i) { if (p.t.trim()) real.push(i); });
@@ -475,14 +524,13 @@ function renderMarked(box, anns, essay) {
   real.forEach(function (i) {
     var p = paras[i], list = (byPara[i] || []).slice();
     var spans = list.filter(function (a) { return a._at >= 0; }).sort(function (x, y) { return x._at - y._at; });
-    var html = '', pos = 0;
+    var rs = [], pos = 0;
     spans.forEach(function (a) {
       if (a._at < pos) return;                     // 겹치면 표시는 건너뛰고 코멘트만
-      html += escH(p.t.slice(pos, a._at)) + '<mark class="' + a._k + '">' + escH(p.t.slice(a._at, a._at + a._len)) +
-              '</mark><sup>' + a._n + '</sup>';
+      rs.push({ s: a._at, e: a._at + a._len, open: '<mark class="' + a._k + '">', close: '</mark>', after: '<sup>' + a._n + '</sup>' });
       pos = a._at + a._len;
     });
-    html += escH(p.t.slice(pos));
+    var html = richHtml(p.raw, rs);
     var d = el('div', 'mp' + (p.c ? ' c' : '')); d.innerHTML = html;
     wrap.appendChild(d);
     if (list.length) {

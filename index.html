@@ -1155,6 +1155,11 @@
     });
   }
   function handleReject(r, cb) {
+    if (r.outline) {                 // ★아웃라인이 아직 통과 전 — 아웃라인 화면으로
+      if (OL && OL.mode !== 'edit') outlineEdit(true);
+      else if (!OL) setState('Your outline page could not load. Tell Mr. Cha.', 'bad');
+      if (cb) cb(false); return;
+    }
     if (r.relogin) {
       setState('Not saved — please log in again', 'bad');
       needRelogin(); if (cb) cb(false); return;
@@ -1363,7 +1368,7 @@
       } else {
         $('finishBtn').disabled = false;
         if (r.relogin) { needRelogin(function () { doFinish(auto); }); return; }
-        if (r.blocked) { handleReject(r); return; }
+        if (r.blocked || r.outline) { handleReject(r); return; }
         if (r.err) { setState(r.err, 'bad'); toast(r.err); }
         else handleReject(r);
       }

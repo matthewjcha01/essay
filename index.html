@@ -6,6 +6,7 @@
 <title>Essay Writing</title>
 <base target="_top">
 <meta charset="utf-8">
+<script src="https://matthewjcha01.github.io/essay/outline.js?v=1"></script>
 <style>
   :root {
     --ink: #1f2328; --muted: #6b7178; --line: #dfe2e6; --bg: #f5f6f8; --paper: #ffffff;
@@ -151,7 +152,25 @@
   #modal .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
   .ghost { background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 10px 16px; color: var(--ink); }
 
+  /* ★아웃라인: 글 쓸 때 오른쪽 그림 · 아웃라인 단계에서는 칸 채우기 화면 */
+  #olPanel { flex: 0 0 32%; max-width: 440px; position: sticky; top: 70px; max-height: calc(100vh - 90px);
+    overflow: auto; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .olHead { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; }
+  .olHead b { flex: 1; font-size: 14px; color: var(--accent); }
+  .olHead button { background: #fff; border: 1px solid #9fb6d3; color: var(--accent); border-radius: 8px; padding: 4px 10px; font-size: 13px; }
+  #olToggle { display: none; }
+  #olEdit { flex: 1; min-width: 0; max-width: 1100px; margin: 0 auto; background: var(--paper); border: 1px solid var(--line);
+    border-radius: 12px; padding: 18px 20px; }
+  #olBadge { display: none; background: #e7f4ef; color: #0f6e56; border-radius: 10px; padding: 2px 10px; font-size: 13px; font-weight: 600; }
+  body.ol-edit #paperWrap, body.ol-edit #fbPanel, body.ol-edit #olPanel, body.ol-edit #finishBtn,
+  body.ol-edit #wc, body.ol-edit #saveState, body.ol-edit #deadline { display: none !important; }
+  body.ol-edit #olBadge { display: inline-block; }
+
   @media (max-width: 860px) {
+    #olPanel { position: static; max-width: none; width: 100%; max-height: none; flex: none; order: -1; }
+    #olPanel.collapsed #olView { display: none; }
+    #olToggle { display: inline-block; }
+    #olEdit { padding: 14px 12px; }
     #layout { flex-direction: column; }
     #fbPanel { position: static; max-width: none; width: 100%; max-height: none; flex: none; }
     #fbPanel.collapsed #fbBody { display: none; }
@@ -257,6 +276,7 @@
 <div id="writer" class="hidden">
   <div id="top">
     <span class="title" id="wTask"></span>
+    <span id="olBadge">🗺 Step 1: Outline</span>
     <span class="meta" id="deadline"></span>
     <span class="spacer"></span>
     <span class="meta" id="wc">0 words</span>
@@ -301,6 +321,11 @@
              data-lt-active="false"></div>
       </div>
     </div>
+    <aside id="olPanel" class="hidden">
+      <div class="olHead"><b>🗺 My outline</b><button id="olRevise">Revise outline</button><button id="olToggle">Hide</button></div>
+      <div id="olView"></div>
+    </aside>
+    <div id="olEdit" class="hidden"></div>
   </div>
 </div>
 
@@ -758,6 +783,7 @@
     // 지난 에세이에서 정한 이번 에세이 목표
     if (d.목표) { $('goalMsg').textContent = d.목표; $('goalBar').classList.remove('hidden'); }
     if (draft.불러옴 && !local) toast('Your last draft has been loaded. Revise it using the feedback.', 4000);
+    setupOutline(d);     // ★아웃라인 (먼저 해야 하면 아웃라인 칸 화면부터)
 
     updateWC(); tickDeadline();
     setInterval(tickDeadline, 20000);
@@ -765,8 +791,76 @@
     setInterval(takeSnap, 30000);
     liveStart();
     setState(dirty ? 'Not saved' : 'Saved', '');
-    ed.focus();
+    if (!(OL && OL.mode === 'edit')) ed.focus();
   }
+
+  // ═══════════ ★아웃라인 ═══════════
+  //  d.ol = { type: 'basic'|'pivot', essay, need, data, result, passed, count }  (아웃라인.gs 의 아웃라인_입장정보_)
+  //  need = 아직 통과한 아웃라인이 없는 새 에세이 → 아웃라인 칸 화면부터. 전부 초록이면 글쓰기 화면이 열림.
+  var OL = null;
+  function setupOutline(d) {
+    OL = null;
+    $('olPanel').classList.add('hidden');
+    if (!d.ol) return;
+    if (!window.MGOutline) {          // outline.js 를 못 읽었으면 예전처럼 바로 쓰기
+      if (d.ol.need) toast('The outline page could not load. You can write now — tell Mr. Cha.', 5000);
+      return;
+    }
+    OL = { type: d.ol.type, essay: d.ol.essay, data: d.ol.data, result: d.ol.result,
+           passed: !!d.ol.passed, count: d.ol.count || 0, mode: 'view', ed: null };
+    if (d.ol.need) outlineEdit(true); else outlineView();
+  }
+  function outlineView() {
+    document.body.classList.remove('ol-edit');
+    $('olEdit').classList.add('hidden'); $('olEdit').innerHTML = '';
+    $('olPanel').classList.remove('hidden');
+    $('olRevise').textContent = OL.data ? 'Revise outline' : 'Make an outline';
+    MGOutline.view($('olView'), { type: OL.type, data: OL.data, result: OL.result, empty: 'No outline for this essay yet.' });
+    OL.mode = 'view'; OL.ed = null;
+    liveSoon();
+  }
+  function outlineEdit(first) {
+    OL.mode = 'edit';
+    document.body.classList.add('ol-edit');
+    $('olEdit').classList.remove('hidden');
+    OL.ed = MGOutline.editor($('olEdit'), {
+      type: OL.type, data: OL.data, result: OL.result, count: OL.count,
+      question: $('promptIn').value, store: 'mg_ol_' + S.id, mustPass: true,
+      title: first ? 'Step 1 — Outline: ' + S.과제 : 'Revise your outline',
+      intro: first
+        ? 'Plan your essay before you write it. Fill in each box using the guide next to it, then press "Check my outline". ' +
+          'When every box is green, your essay page opens — and your outline stays next to it while you write.'
+        : 'Change your plan here. When every box is green again, you go back to your essay. Your essay is saved.',
+      passLabel: first ? 'Start writing →' : 'Back to my essay →',
+      onSubmit: function (data, warned, done) {
+        call('olSubmit', [TOKEN, JSON.stringify({ sub: S.id }), JSON.stringify(data), JSON.stringify(warned)], function (r) {
+          if (r.relogin) { needRelogin(); done({ err: 'Please log in again, then press the button again.' }); return; }
+          if (r.blocked) { done({ err: r.err }); return; }
+          if (r.ok) { OL.data = r.data || data; OL.result = r.result; OL.count = r.count; if (r.passed) OL.passed = true; }
+          done(r);
+        }, function () { done({ err: 'Connection error. Please press the button again.' }); });
+      },
+      onResult: function () {
+        liveSoon();
+        if (!$('promptIn').value.trim() && OL.data && OL.data.question) { $('promptIn').value = OL.data.question; markDirty(); }
+      },
+      onPass: function () {
+        outlineView();
+        toast(first ? 'Your outline passed! Now write your essay. Your outline is next to your paper.' : 'Your outline is updated.', 4500);
+        ed.focus();
+      },
+      onCancel: first ? null : function () { outlineView(); ed.focus(); },
+      onChange: function () { LIVE.lastInput = Date.now(); liveSoon(); },
+      onKorean: koWarn
+    });
+    window.scrollTo(0, 0);
+    liveSoon();
+  }
+  $('olRevise').onclick = function () { if (OL && !locked) outlineEdit(false); };
+  $('olToggle').onclick = function () {
+    var p = $('olPanel'); p.classList.toggle('collapsed');
+    this.textContent = p.classList.contains('collapsed') ? 'Show' : 'Hide';
+  };
 
   function fbPara(t) {
     if (t === '———') return '<hr style="border:0;border-top:1px solid #ddd;margin:14px 0">';
@@ -1140,6 +1234,13 @@
     return out.join('\n');
   }
   function livePayload() {
+    // ★아웃라인 단계면 모니터에 아웃라인 글을 보냄
+    if (OL && OL.mode === 'edit' && OL.ed) {
+      var od = OL.ed.data();
+      return { token: TOKEN, cid: CID, title: '[Outline — step 1]', prompt: od.question || $('promptIn').value,
+               text: OL.ed.text(), wc: 0, idle: Math.round((Date.now() - LIVE.lastInput) / 1000),
+               pastes: liveCount('paste'), aways: liveCount('away') };
+    }
     return { token: TOKEN, cid: CID, title: $('titleIn').value, prompt: $('promptIn').value,
              text: liveText(), wc: ((ed.innerText || ed.textContent || '').trim().match(/\S+/g) || []).length,
              idle: Math.round((Date.now() - LIVE.lastInput) / 1000),

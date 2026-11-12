@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>window.API_URL = "https://script.google.com/macros/s/AKfycbyZVv25-zBxV0-CCebo2sy9l4cRX0QmpOkS1VW5pK2IYeSWTReGFhfjVoPgspVn-uhv-g/exec";</script>
 <title>Mind Grove Revision</title>
+<script src="https://matthewjcha01.github.io/essay/outline.js?v=1"></script>
 <style>
   :root {
     --bg: #F6F5F1;
@@ -137,6 +138,14 @@
            border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
   .reply .rlabel { font-size: 12px; font-weight: 700; color: var(--mid); text-transform: uppercase; letter-spacing: .05em; }
   .reply .rx { margin-left: auto; background: none; color: var(--muted); padding: 0 6px; min-height: 0; font-size: 18px; }
+  /* ★아웃라인 탭 (왼쪽: 피드백 | 내 아웃라인) */
+  .tabs { display: flex; gap: 4px; margin: -6px 0 14px; border-bottom: 1px solid var(--line); }
+  .tabs button { background: none; color: var(--muted); border: 0; border-bottom: 3px solid transparent; border-radius: 0;
+                 padding: 6px 10px; min-height: 0; width: auto; font-weight: 700; }
+  .tabs button.on { color: var(--accent); border-bottom-color: var(--accent); }
+  .olbar { display: flex; gap: 8px; align-items: center; margin: 0 0 10px; flex-wrap: wrap; }
+  .olbar .t { flex: 1; color: var(--muted); font-size: 13px; }
+  .olbar button { padding: 6px 12px; min-height: 0; width: auto; font-size: 14px; }
   /* 폰처럼 아주 좁은 화면에서만 위아래로 */
   @media (max-width: 639px) {
     .grid { grid-template-columns: 1fr; }
@@ -580,10 +589,11 @@ function render() {
 
   var grid = el('div', 'grid');
   var fbBox = el('section', 'panel fb'); fbBox.id = 'fb';
-  if (state.pending) renderPending(fbBox);
-  else if (state.firstPending) renderFirstPending(fbBox);
-  else if (state.feedback) renderFeedback(fbBox, state.feedback, state.count);
-  else renderGoalsOnly(fbBox, state.goals);
+  var fbArea = olTabs(fbBox);   // ★원서 에세이: 피드백 | 내 아웃라인 탭
+  if (state.pending) renderPending(fbArea);
+  else if (state.firstPending) renderFirstPending(fbArea);
+  else if (state.feedback) renderFeedback(fbArea, state.feedback, state.count);
+  else renderGoalsOnly(fbArea, state.goals);
   grid.appendChild(fbBox);
 
   var ed = el('section', 'panel editor');
@@ -692,6 +702,75 @@ function render() {
   drawAsk();
   if (LIVE.lastReply) showReply(LIVE.lastReply, true);
   btn.addEventListener('click', submit);
+}
+
+// ── ★아웃라인 (아웃라인.gs: olRevGet · olSubmit) ──
+//  원서 에세이만. 왼쪽 패널 위 탭으로 '피드백' 과 '내 아웃라인' 을 바꿔 봄.
+//  여기서 고친 아웃라인도 칸마다 색을 받음 (에세이 제출은 막지 않음).
+var OLR = { tab: 'fb', loaded: false, mode: 'view', data: null, result: null, type: 'basic', count: 0 };
+function callRaw(fn, args, ok, fail) {     // ol* 함수는 { result: … } 로 감싸지 않고 JSON 글을 돌려줌
+  fetch(window.API_URL, { method: 'POST', body: JSON.stringify({ fn: fn, args: args }) })
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+    .then(function (t) { var x = JSON.parse(t); if (x && x.__error) throw new Error(x.__error); ok(typeof x === 'string' ? JSON.parse(x) : x); })
+    .catch(function (e) { if (fail) fail(e); });
+}
+function olLoad() {
+  if (!window.MGOutline || !state || !state.full) return;
+  callRaw('olRevGet', [TOKEN], function (o) {
+    if (o && !o.err) { OLR.data = o.data; OLR.result = o.result; OLR.type = o.type || 'basic'; OLR.count = o.count || 0; }
+    OLR.loaded = true;
+    var a = document.getElementById('olArea'); if (a && OLR.tab === 'ol') drawOutlineTab(a);
+  }, function () { OLR.loaded = true; OLR.err = true; });
+}
+function olTabs(fbBox) {
+  if (!window.MGOutline || !state.full) return fbBox;
+  var tabs = el('div', 'tabs');
+  var b1 = el('button', null, 'Feedback'), b2 = el('button', null, '🗺 My outline');
+  b1.type = b2.type = 'button';
+  tabs.appendChild(b1); tabs.appendChild(b2);
+  fbBox.appendChild(tabs);
+  var fa = el('div'), oa = el('div'); oa.id = 'olArea';
+  fbBox.appendChild(fa); fbBox.appendChild(oa);
+  function show() {
+    b1.classList.toggle('on', OLR.tab === 'fb'); b2.classList.toggle('on', OLR.tab === 'ol');
+    fa.style.display = OLR.tab === 'fb' ? '' : 'none'; oa.style.display = OLR.tab === 'ol' ? '' : 'none';
+    if (OLR.tab === 'ol') drawOutlineTab(oa);
+  }
+  b1.onclick = function () { OLR.tab = 'fb'; show(); };
+  b2.onclick = function () { OLR.tab = 'ol'; show(); };
+  show();
+  return fa;
+}
+function drawOutlineTab(area) {
+  area.innerHTML = '';
+  if (!OLR.loaded) { area.appendChild(el('div', 'hint', OLR.err ? 'Could not load your outline. Refresh the page.' : 'Loading your outline…')); return; }
+  if (OLR.mode === 'edit') {
+    MGOutline.editor(area, {
+      type: OLR.type, data: OLR.data, result: OLR.result, count: OLR.count, narrow: true,
+      question: state.prompt, store: 'mg-ol-' + TOKEN, title: OLR.data ? 'Revise your outline' : 'Make your outline',
+      intro: 'Use your outline as the map for your essay. When every box is green, your plan is clear.',
+      passLabel: 'Done', cancelLabel: 'Back to my outline',
+      onSubmit: function (data, warned, done) {
+        callRaw('olSubmit', ['', JSON.stringify({ rev: TOKEN }), JSON.stringify(data), JSON.stringify(warned)], function (r) {
+          if (r.ok) { OLR.data = r.data || data; OLR.result = r.result; OLR.count = r.count; }
+          done(r);
+        }, function () { done({ err: 'Connection error. Please press the button again.' }); });
+      },
+      onPass: function () { OLR.mode = 'view'; drawOutlineTab(area); },
+      onCancel: function () { OLR.mode = 'view'; drawOutlineTab(area); }
+    });
+    return;
+  }
+  var bar = el('div', 'olbar');
+  var all = OLR.result && OLR.result.pass;
+  bar.appendChild(el('span', 't', !OLR.data ? 'No outline for this essay yet.' :
+    all ? 'Your outline — every box is green. Keep your essay on this map.' : 'Your outline. Fix the yellow and red boxes in “Revise outline”.'));
+  var rv = el('button', null, OLR.data ? 'Revise outline' : 'Make an outline'); rv.type = 'button';
+  rv.onclick = function () { OLR.mode = 'edit'; drawOutlineTab(area); };
+  if (!state.done) bar.appendChild(rv);
+  area.appendChild(bar);
+  var v = el('div'); area.appendChild(v);
+  if (OLR.data) MGOutline.view(v, { type: OLR.type, data: OLR.data, result: OLR.result, notes: true });
 }
 
 function submit() {
@@ -877,6 +956,7 @@ call('revGetPageData', [TOKEN], function (data) {
     } catch (e) {}
     render();
     liveStart();
+    olLoad();
     if (state.essayUnsaved) {
       document.getElementById('essay').value = state.essayUnsaved;
       document.getElementById('status').textContent = 'We restored the changes you had not submitted yet.';

@@ -966,7 +966,7 @@ function liveSoon() {
   LIVE.t = setTimeout(liveSend, Date.now() - LIVE.lastSent > 5000 ? 0 : 1500);
 }
 function liveSend() {
-  if (!LIVE.started || !state) return;
+  if (!LIVE.started || !state || LIVE.stale) return;
   if (LIVE.busy) { LIVE.again = true; return; }
   if (!navigator.onLine) return;
   LIVE.busy = true; LIVE.lastSent = Date.now();
@@ -975,6 +975,7 @@ function liveSend() {
   if (sentAsk !== undefined) p.ask = sentAsk;
   call('revLive', [TOKEN, JSON.stringify(p)], function (r) {
     LIVE.busy = false;
+    if (r && r.stale) { liveStale(); return; }   // ★이 창은 옛날 화면 (다른 창에서 이미 더 제출함)
     if (r && r.ok) {
       if (!LIVE.ok) { LIVE.ok = true; drawAsk(); }
       if (r.reply && r.reply.t > LIVE.replyT) {
@@ -991,6 +992,22 @@ function liveSend() {
     LIVE.busy = false;
     if (sentAsk !== undefined && LIVE.askSend === undefined) LIVE.askSend = sentAsk;
   });
+}
+// ★같은 에세이가 다른 창(탭·기기)에서 열려 있고 그쪽이 더 최근 제출 → 이 창은 멈춤
+//   (두 창이 번갈아 보내면 선생님 모니터 점수가 예전 ↔ 지금으로 왔다 갔다 함)
+function liveStale() {
+  if (LIVE.stale) return;
+  LIVE.stale = true; LIVE.started = false; clearTimeout(LIVE.t);
+  var btn = document.getElementById('submit'), ta = document.getElementById('essay'), st = document.getElementById('status');
+  if (btn) btn.disabled = true;
+  if (ta) ta.readOnly = true;
+  if (st) {
+    st.className = 'status err';
+    st.innerHTML = 'This essay is open in another window, and that window is newer. Close this window, or ' +
+      '<a href="#" id="staleReload">reload this page</a> to see your newest feedback.';
+    var a = document.getElementById('staleReload');
+    if (a) a.onclick = function (e) { e.preventDefault(); location.reload(); };
+  }
 }
 function liveStart() {
   if (LIVE.started) return;

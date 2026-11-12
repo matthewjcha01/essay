@@ -7,6 +7,7 @@
  *  MGOutline.view(el, opts)    채운 아웃라인을 그림(흐름)으로 — 글 쓸 때 옆 패널 · 선생님 화면
  *  MGOutline.text(type, data)  글로 (수업 모니터에 보내는 용)
  *  칸 id 는 아웃라인.gs 와 같아야 합니다.
+ *  종류: 'basic' (기본형) · 'pivot' (Concession-Pivot) · 'compare' (비교/대조 — 예시 A·B 두 칸, A vs B)
  * ═══════════════════════════════════════════════════════════════ */
 (function () {
   if (window.MGOutline) return;
@@ -94,11 +95,12 @@
     document.head.appendChild(s);
   }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function typeOf(t) { return t === 'pivot' || t === 'compare' ? t : 'basic'; }
   function words(s) { return (String(s || '').trim().match(/\S+/g) || []).length; }
   var KO = /[ᄀ-ᇿ㄰-㆏가-힯]/g;
 
   // ── 빈 아웃라인 ──
-  function body(last) { var b = { topic: { who: '', verb: '', what: '' }, page: '', quote: '', before: '', after: '', sowhat: '' }; b[last] = ''; return b; }
+  function body(last) { var b = { topic: { who: '', verb: '', what: '' }, page: '', quote: '', page2: '', quote2: '', before: '', after: '', sowhat: '' }; b[last] = ''; return b; }
   function blank(type) {
     if (type === 'pivot') return { question: '', concession: '', points: [''], cbodies: [body('comment')], however: '', rbodies: [body('comment'), body('comment')], significance: '' };
     return { question: '', thesis: '', points: ['', ''], bodies: [body('connection'), body('connection')], car: null, significance: '' };
@@ -141,7 +143,15 @@
     } else {
       L.push({ id: 'thesis', kind: 'thesis', label: 'Thesis' });
       o.points.forEach(function (p, i) { L.push({ id: 'p' + (i + 1), kind: 'point', label: 'Point ' + (i + 1), i: i }); });
-      o.bodies.forEach(function (b, i) { bd(b, 'b' + (i + 1), 'Body ' + (i + 1), 'Connection'); });
+      o.bodies.forEach(function (b, i) {
+        if (type === 'compare') {
+          var pre = 'b' + (i + 1), name = 'Body ' + (i + 1);
+          L.push({ id: pre + 't', kind: 'topic', label: name + ' · Topic', b: b });
+          L.push({ id: pre + 'e', kind: 'cexample', label: name + ' · Example A · B', b: b });
+          L.push({ id: pre + 'g', kind: 'cgap', label: name + ' · A vs B', b: b });
+          L.push({ id: pre + 'm', kind: 'connection', label: name + ' · Connection', b: b });
+        } else bd(b, 'b' + (i + 1), 'Body ' + (i + 1), 'Connection');
+      });
       if (o.car) { L.push({ id: 'carc', kind: 'counter', label: 'Counter + weak spot' }); L.push({ id: 'carr', kind: 'rebut', label: 'Rebut' }); }
     }
     L.push({ id: 'sig', kind: 'significance', label: 'Significance' });
@@ -165,10 +175,18 @@
     ccomment: { w: 'How things looked on the surface. Don’t say it was false yet.', e: '“On the surface, the farm looked like a success”', c: 'Does it make the reader feel a turn is coming?' },
     however: { w: 'ONE sudden sentence that says the opposite of your Concession. This is your real thesis.', e: 'However, the Rebellion only gives the animals new masters who are crueler than the old ones.', c: 'Is it one sentence? Does it directly turn the Concession around?' },
     rtopic: { w: 'who → verb → what, showing what is really true (“In reality…”).', e: 'In reality, the pigs → rewrite → the Commandments', c: 'Does it show the truth strongly?' },
-    rcomment: { w: 'Make clear what is really true.', e: '“the animals were never free”', c: 'Does it make the turn feel right?' }
+    rcomment: { w: 'Make clear what is really true.', e: '“the animals were never free”', c: 'Does it make the turn feel right?' },
+    cexample: { w: 'ONE moment for A and ONE moment for B — the best one for each. Page number + the first few words of each quote.', e: 'A: p.__ “first words of the quote…” &nbsp;B: p.__ “first words…”', thin: 'A: p.62 &nbsp;B: (empty)', c: 'Does each moment show your topic best for that side?' },
+    cgap: { w: '2–4 words for A, 2–4 words for B (how they differ in these two moments). Then one “so what” line that ends at your topic.', e: 'A: hugs Susan at once vs B: pulls away from her hand / so what: being hurt makes trust slow', thin: 'nice vs not nice', c: 'Is the difference clear? Does “so what” lead to your topic?' }
   };
-  function guideHtml(kind) {
-    var g = G[kind] || {};
+  // 비교/대조 칸의 가이드 (같은 칸 이름이어도 내용이 다른 것)
+  var GC = {
+    thesis: { w: 'One full sentence — what the DIFFERENCE between A and B shows about people and life. Not just “they are different.” No character names.', e: 'Someone who has always been loved can trust a new home at once, but someone who has been hurt must learn to trust step by step.', c: 'Does it say what the difference SHOWS? Could anyone find a hole in it?' },
+    point: { w: '2–4 words for each way you will compare A and B — the same way for both — in the same order as your body paragraphs.', e: '① trusting a new home &nbsp;② asking for help', thin: '① different ② same', c: 'One way of comparing for each body paragraph?' },
+    topic: { w: 'who → strong verb → what, showing A and B side by side.', e: 'Jamie, unlike Ada → trusts → Susan from the first night', thin: 'Ada and Jamie → are → different', c: 'Does it name both sides? Does your verb make the claim feel certain?' }
+  };
+  function guideHtml(kind, type) {
+    var g = (type === 'compare' && GC[kind]) || G[kind] || {};
     return '<div><b>Write:</b> ' + g.w + '</div>' +
       (g.e ? '<div><b>e.g.</b> <span class="ex">' + g.e + '</span></div>' : '') +
       (g.thin ? '<div class="thin">Too thin: <span class="ex">' + g.thin + '</span></div>' : '') +
@@ -225,6 +243,18 @@
           if (!block[k.id] && !/\d/.test(b.page)) block[k.id] = 'Write the page number (a number).';
           if (!block[k.id] && words(b.quote) < 3) warn[k.id] = 'Write the first few words of the quote so you remember the moment.';
           break;
+        case 'cexample':
+          need(k.id, [b.page, b.quote, b.page2, b.quote2], 'Write the page number and the start of the quote for A and for B.');
+          if (!block[k.id] && (!/\d/.test(b.page) || !/\d/.test(b.page2))) block[k.id] = 'Write the page number (a number) for A and for B.';
+          if (!block[k.id] && (words(b.quote) < 3 || words(b.quote2) < 3)) warn[k.id] = 'Write the first few words of each quote so you remember the moment.';
+          break;
+        case 'cgap':
+          need(k.id, [b.before, b.after, b.sowhat], 'Fill in A, B, and so what.');
+          if (!block[k.id]) {
+            if (words(b.before) > 10 || words(b.after) > 10) warn[k.id] = 'Keep A and B short (2–4 words each).';
+            else if (words(b.sowhat) < 3) warn[k.id] = 'Write one line for “so what” that ends at your topic.';
+          }
+          break;
         case 'gap':
           need(k.id, [b.before, b.after, b.sowhat], 'Fill in before, after, and so what.');
           if (!block[k.id]) {
@@ -263,12 +293,18 @@
 
   // ── 글로 (모니터 · 실시간) ──
   function text(type, o) {
+    type = typeOf(type);
     o = fill(type, o);
     var L = ['[OUTLINE]', 'Question: ' + o.question];
     function bt(b, name, last) {
       L.push(name + ' — Topic: ' + [b.topic.who, b.topic.verb, b.topic.what].join(' → '));
-      L.push('   Example: p.' + b.page + ' "' + b.quote + '"');
-      L.push('   Before → after: ' + b.before + ' → ' + b.after + ' / so what: ' + b.sowhat);
+      if (type === 'compare') {
+        L.push('   Example A: p.' + b.page + ' "' + b.quote + '"  ·  Example B: p.' + b.page2 + ' "' + b.quote2 + '"');
+        L.push('   A vs B: ' + b.before + ' vs ' + b.after + ' / so what: ' + b.sowhat);
+      } else {
+        L.push('   Example: p.' + b.page + ' "' + b.quote + '"');
+        L.push('   Before → after: ' + b.before + ' → ' + b.after + ' / so what: ' + b.sowhat);
+      }
       L.push('   ' + last + ': ' + (b.connection || b.comment || ''));
     }
     if (type === 'pivot') {
@@ -291,7 +327,7 @@
   function editor(root, opts) {
     inject();
     opts = opts || {};
-    var type = opts.type === 'pivot' ? 'pivot' : 'basic';
+    var type = typeOf(opts.type);
     var data = fill(type, opts.data);
     if (!data.question && opts.question) data.question = String(opts.question).replace(KO, '');
     // 기기에 남은 더 최근 글
@@ -311,7 +347,8 @@
       switch (k.kind) {
         case 'thesis': return d.thesis; case 'concession': return d.concession; case 'however': return d.however;
         case 'point': return d.points[k.i]; case 'significance': return d.significance;
-        case 'example': return b.page + '|' + b.quote; case 'gap': return b.before + '|' + b.after + '|' + b.sowhat;
+        case 'example': return b.page + '|' + b.quote; case 'gap': case 'cgap': return b.before + '|' + b.after + '|' + b.sowhat;
+        case 'cexample': return b.page + '|' + b.quote + '|' + b.page2 + '|' + b.quote2;
         case 'counter': return d.car.counter + '|' + d.car.weak; case 'rebut': return d.car.rebut;
         case 'connection': return b.connection; case 'ccomment': case 'rcomment': return b.comment;
         default: return b.topic.who + '|' + b.topic.verb + '|' + b.topic.what;
@@ -356,6 +393,13 @@
         case 'example':
           return '<div class="mgol-line"><span class="pre">page</span>' + inp(pre + 'page', '15', 'pg') + '</div>' +
                  '<div class="mgol-line"><span class="pre">quote</span>' + inp(pre + 'quote', '“You can’t leave…”') + '</div>';
+        case 'cexample':
+          return '<div class="mgol-line"><span class="pre">A page</span>' + inp(pre + 'page', '15', 'pg') + inp(pre + 'quote', '“first words of A’s quote…”') + '</div>' +
+                 '<div class="mgol-line"><span class="pre">B page</span>' + inp(pre + 'page2', '22', 'pg') + inp(pre + 'quote2', '“first words of B’s quote…”') + '</div>';
+        case 'cgap':
+          return '<div class="mgol-line"><span class="pre">A</span>' + inp(pre + 'before', 'what A does here') + '</div>' +
+                 '<div class="mgol-line"><span class="pre">vs B</span>' + inp(pre + 'after', 'what B does here') + '</div>' +
+                 '<div class="mgol-line"><span class="pre">so what</span>' + inp(pre + 'sowhat', 'ends at your topic') + '</div>';
         case 'gap':
           return '<div class="mgol-line"><span class="pre">before</span>' + inp(pre + 'before', 'other kids leave safely') + '</div>' +
                  '<div class="mgol-line"><span class="pre">after</span>' + inp(pre + 'after', 'Ada stays under bombs') + '</div>' +
@@ -381,7 +425,7 @@
       if (r && r.c !== 'g' && r.n && !changed) msg += '<div class="mgol-msg note ' + r.c + '">' + esc(r.n) + '</div>';
       if (changed) msg += '<div class="mgol-msg" style="color:var(--mu);padding-left:0">Changed — it will be checked again.</div>';
       return '<div class="mgol-row" data-id="' + k.id + '"><div class="mgol-box' + cls + '"><div class="mgol-lab"><span class="mgol-dot ' + (r && !changed ? r.c : '') + '"></span>' +
-        esc(k.label) + '</div>' + boxInputs(k) + msg + '</div><div class="mgol-guide">' + guideHtml(k.kind) + '</div></div>';
+        esc(k.label) + '</div>' + boxInputs(k) + msg + '</div><div class="mgol-guide">' + guideHtml(k.kind, type) + '</div></div>';
     }
 
     function counts() {
@@ -394,7 +438,7 @@
       var ch = check(type, data), L = boxList(type, data), h = '';
       var keepY = window.scrollY;
       h += '<div class="mgol-head"><h2>' + esc(opts.title || 'My outline') + '</h2><span class="sub">' +
-           (type === 'pivot' ? 'Concession → However → Reality' : 'Plan first. Thesis is a sentence; the rest is keywords.') + '</span></div>';
+           (type === 'pivot' ? 'Concession → However → Reality' : type === 'compare' ? 'Compare A and B the same way in every body. Thesis is a sentence; the rest is keywords.' : 'Plan first. Thesis is a sentence; the rest is keywords.') + '</span></div>';
       if (opts.intro) h += '<div class="mgol-banner info">' + esc(opts.intro) + '</div>';
       if (result && result.boxes) {
         var n = counts();
@@ -539,7 +583,7 @@
   function view(root, opts) {
     inject();
     opts = opts || {};
-    var type = opts.type === 'pivot' ? 'pivot' : 'basic';
+    var type = typeOf(opts.type);
     if (!opts.data) { root.innerHTML = '<div class="mgolv"><div class="mgolv-empty">' + esc(opts.empty || 'No outline yet.') + '</div></div>'; return; }
     var o = fill(type, opts.data);
     var R = opts.result && opts.result.boxes ? opts.result.boxes : {};
@@ -553,8 +597,12 @@
       var t = b.topic;
       return '<div class="mgolv-body"><div class="bh">' + esc(name) + '</div>' +
         li(pre + 't', 'Topic', [t.who ? esc(t.who) : '', t.verb ? '<b>' + esc(t.verb) + '</b>' : '', t.what ? esc(t.what) : ''].filter(Boolean).join(' → '), true) +
-        li(pre + 'e', 'Example', (b.page ? 'p.' + esc(b.page) + ' ' : '') + (b.quote ? '“' + esc(b.quote) + '”' : ''), true) +
-        li(pre + 'g', 'Before→after', (b.before || b.after ? esc(b.before) + ' → ' + esc(b.after) : '') + (b.sowhat ? '<br><span style="color:#6b7178">so what:</span> ' + esc(b.sowhat) : ''), true) +
+        (type === 'compare'
+          ? li(pre + 'e', 'Example A · B', '<span style="color:#6b7178">A</span> ' + (b.page ? 'p.' + esc(b.page) + ' ' : '') + (b.quote ? '“' + esc(b.quote) + '”' : '') +
+               '<br><span style="color:#6b7178">B</span> ' + (b.page2 ? 'p.' + esc(b.page2) + ' ' : '') + (b.quote2 ? '“' + esc(b.quote2) + '”' : ''), true) +
+            li(pre + 'g', 'A vs B', (b.before || b.after ? esc(b.before) + ' <b>vs</b> ' + esc(b.after) : '') + (b.sowhat ? '<br><span style="color:#6b7178">so what:</span> ' + esc(b.sowhat) : ''), true)
+          : li(pre + 'e', 'Example', (b.page ? 'p.' + esc(b.page) + ' ' : '') + (b.quote ? '“' + esc(b.quote) + '”' : ''), true) +
+            li(pre + 'g', 'Before→after', (b.before || b.after ? esc(b.before) + ' → ' + esc(b.after) : '') + (b.sowhat ? '<br><span style="color:#6b7178">so what:</span> ' + esc(b.sowhat) : ''), true)) +
         li(pre + 'm', lastName, (b.connection || b.comment) ? '↩ ' + esc(b.connection || b.comment) + (back ? ' <span style="color:#0f6e56;font:11px -apple-system,sans-serif">→ ' + esc(back) + '</span>' : '') : '', true, 'conn') +
         '</div>';
     }
@@ -581,5 +629,5 @@
     root.innerHTML = '<div class="mgolv">' + h + '</div>';
   }
 
-  window.MGOutline = { editor: editor, view: view, text: text, check: check, blank: blank, fill: fill, boxList: boxList, version: 1 };
+  window.MGOutline = { editor: editor, view: view, text: text, check: check, blank: blank, fill: fill, boxList: boxList, typeOf: typeOf, version: 2 };
 })();

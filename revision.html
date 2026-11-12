@@ -162,6 +162,9 @@
 
 <script>
 var TOKEN = (new URLSearchParams(location.search).get('t') || '').replace(/[^a-zA-Z0-9]/g, '');
+// ★선생님 보기 모드 (주소 끝에 &view=teacher): 읽기만 — 모니터로 아무것도 보내지 않고, 제출·질문·글 고치기 없음
+//   (학생이 수업 전이라 모니터에 안 보일 때 선생님이 글을 보려고 여는 용도. 학생 화면과 섞이지 않음)
+var VIEW = new URLSearchParams(location.search).get('view') === 'teacher';
 
 // 서버 호출: GitHub 페이지에서 Apps Script로 직접 요청 (구글 계정과 무관하게 작동)
 function call(fn, args, ok, fail) {
@@ -758,6 +761,13 @@ function render() {
   drawAsk();
   if (LIVE.lastReply) showReply(LIVE.lastReply, true);
   btn.addEventListener('click', submit);
+  if (VIEW) {
+    ta.readOnly = true; btn.style.display = 'none'; ask.style.display = 'none';
+    var vb = el('div', 'tnote');
+    vb.appendChild(el('div', 'label', '선생님 보기 모드'));
+    vb.appendChild(el('div', null, '읽기 전용입니다. 이 창은 모니터에 아무것도 보내지 않고, 제출·질문도 할 수 없습니다. 학생 화면과 섞이지 않습니다.'));
+    app.insertBefore(vb, app.firstChild);
+  }
 }
 
 // ── ★아웃라인 (아웃라인.gs: olRevGet · olSubmit) ──
@@ -823,7 +833,7 @@ function drawOutlineTab(area) {
     all ? 'Your outline — every box is green. Keep your essay on this map.' : 'Your outline. Fix the yellow and red boxes in “Revise outline”.'));
   var rv = el('button', null, OLR.data ? 'Revise outline' : 'Make an outline'); rv.type = 'button';
   rv.onclick = function () { OLR.mode = 'edit'; drawOutlineTab(area); };
-  if (!state.done) bar.appendChild(rv);
+  if (!state.done && !VIEW) bar.appendChild(rv);   // 보기 모드에서는 아웃라인도 못 고침
   area.appendChild(bar);
   var v = el('div'); area.appendChild(v);
   if (OLR.data) MGOutline.view(v, { type: OLR.type, data: OLR.data, result: OLR.result, notes: true });
@@ -966,7 +976,7 @@ function liveSoon() {
   LIVE.t = setTimeout(liveSend, Date.now() - LIVE.lastSent > 5000 ? 0 : 1500);
 }
 function liveSend() {
-  if (!LIVE.started || !state || LIVE.stale) return;
+  if (VIEW || !LIVE.started || !state || LIVE.stale) return;
   if (LIVE.busy) { LIVE.again = true; return; }
   if (!navigator.onLine) return;
   LIVE.busy = true; LIVE.lastSent = Date.now();
@@ -1088,11 +1098,11 @@ callRetry('revGetPageData', [TOKEN], function (data) {
     }
     state = data;
     try {
-      var saved = localStorage.getItem('mg-draft-' + TOKEN);
+      var saved = VIEW ? '' : localStorage.getItem('mg-draft-' + TOKEN);
       if (saved && saved.trim() && saved !== state.essay) state.essayUnsaved = saved;
     } catch (e) {}
     render();
-    liveStart();
+    if (!VIEW) liveStart();
     olLoad();
     if (state.essayUnsaved) {
       document.getElementById('essay').value = state.essayUnsaved;

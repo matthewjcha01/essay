@@ -167,8 +167,16 @@ var TOKEN = (new URLSearchParams(location.search).get('t') || '').replace(/[^a-z
 function call(fn, args, ok, fail) {
   fetch(window.API_URL, { method: 'POST', body: JSON.stringify({ fn: fn, args: args }) })
     .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
-    .then(function (t) { var x = JSON.parse(t); if (x && x.__error) throw new Error(x.__error); ok(x.result); })
+    .then(function (t) { var x = JSON.parse(t); if (x && x.__error) { var se = new Error(x.__error); se.server = true; throw se; } ok(x.result); })
     .catch(function (e) { if (fail) fail(e); });
+}
+// 잠깐 실패하면 몇 초 뒤 한 번 더 (글을 바꾸지 않는 '읽기' 요청에만 씀)
+function callRetry(fn, args, ok, fail, tries) {
+  tries = tries == null ? 2 : tries;
+  call(fn, args, ok, function (e) {
+    if (tries > 0 && !(e && e.server && /^(LIMIT|CLOSED): /.test(e.message))) setTimeout(function () { callRetry(fn, args, ok, fail, tries - 1); }, 3000);
+    else if (fail) fail(e);
+  });
 }
 var state = null;
 
@@ -799,41 +807,88 @@ function submit() {
   st.className = 'status';
   st.innerHTML = '<span class="spin"></span>Reading your essay… this takes about ' + (state.formal ? '1–2 minutes' : '30 seconds') +
     '. Do not close this page.';
+  var before = state.count || 0;
+  sendRevision(text, before, 0);
+}
+
+// 제출 성공 → 화면 갱신 (서버 답을 받았을 때)
+function afterSubmit(res, text) {
+  state.feedback = res.feedback || null; state.count = res.count; state.essay = text;
+  if (res.feedback && res.feedback.new_goals && res.feedback.new_goals.length) {
+    state.goals = res.feedback.new_goals.slice();
+    if (res.feedback.next_grammar) state.grammar = res.feedback.next_grammar;
+  }
+  state.score = res.score; state.done = res.done; if (res.passScore) state.passScore = res.passScore; if (res.passLetter) state.passLetter = res.passLetter;
+  state.pending = !!res.pending; state.letter = res.letter || ''; state.teacherNote = ''; state.returned = false;
+  if (state.limit && !state.limit.off) {
+    state.limit.nextAt = Date.now() + (state.limit.gapMin || 10) * 60000;
+    state.limit.left = Math.max(0, (state.limit.left || 1) - 1);
+  }
+  showSubmitted();
+}
+function showSubmitted() {
+  try { localStorage.removeItem('mg-draft-' + TOKEN); } catch (e) {}
+  render();
+  var fb = document.getElementById('fb');
+  fb.classList.add('flash');
+  fb.scrollTop = 0;
+  if (window.innerWidth < 640) fb.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  var s2 = document.getElementById('status');
+  if (state.pending) s2.textContent = 'You reached your goal! Your teacher will give you final feedback.';
+  else if (state.firstPending) s2.textContent = 'Submitted! Your teacher is checking your comments.';
+  else if (!state.done) s2.textContent = 'Submitted! Read the feedback, then keep revising.';
+  if (state.done) LIVE.asking = false;
+  liveSend();
+}
+
+// ★연결이 끊겨도 학생이 손해 보지 않게:
+//  1) 서버가 바빠서 끊기면, 먼저 제출이 들어갔는지 확인 (채점은 1~2분 걸려서 확인을 몇 번 함)
+//  2) 들어갔으면 → 그 결과를 그대로 보여 줌 (다시 보내지 않음 = 이중 제출·횟수 깎임 없음)
+//  3) 안 들어갔으면 → 자동으로 딱 한 번 다시 보냄
+//  4) 그래도 안 되면 → 글은 그대로 두고 친절한 영어 안내
+function sendRevision(text, before, attempt) {
+  var st = document.getElementById('status');
   call('revSubmit', [TOKEN, text], function (res) {
-      state.feedback = res.feedback || null; state.count = res.count; state.essay = text;
-      if (res.feedback && res.feedback.new_goals && res.feedback.new_goals.length) {
-        state.goals = res.feedback.new_goals.slice();
-        if (res.feedback.next_grammar) state.grammar = res.feedback.next_grammar;
+    afterSubmit(res, text);
+  }, function (err) {
+    var msg = String(err && err.message || err);
+    if (err && err.server && msg.indexOf('LIMIT: ') === 0) return submitFailed(msg.slice(7), true);
+    if (err && err.server && msg.indexOf('CLOSED: ') === 0) {
+      submitFailed(msg.slice(8), true);
+      var btn = document.getElementById('submit'), ta = document.getElementById('essay');
+      if (btn) btn.style.display = 'none'; if (ta) ta.readOnly = true;
+      if (state.due) state.due.closed = true;
+      return;
+    }
+    // 서버가 오류로 끝났으면(채점 실패 등) 한 번만 확인하고, 연결이 끊긴 거면 채점이 끝날 때까지 몇 번 확인
+    var checks = err && err.server ? 1 : 8;
+    if (st) { st.className = 'status'; st.innerHTML = '<span class="spin"></span>The connection was slow. Checking whether your essay arrived… Do not close this page.'; }
+    checkArrived(before, checks, function (data) {
+      if (data) { state = data; state.essay = text; showSubmitted(); return; }
+      if (attempt < 1) {
+        if (st) st.innerHTML = '<span class="spin"></span>Sending your essay again… this takes about ' + (state.formal ? '1–2 minutes' : '30 seconds') + '. Do not close this page.';
+        setTimeout(function () { sendRevision(text, before, attempt + 1); }, 4000);
+        return;
       }
-      state.score = res.score; state.done = res.done; if (res.passScore) state.passScore = res.passScore; if (res.passLetter) state.passLetter = res.passLetter;
-      state.pending = !!res.pending; state.letter = res.letter || ''; state.teacherNote = ''; state.returned = false;
-      if (state.limit && !state.limit.off) {
-        state.limit.nextAt = Date.now() + (state.limit.gapMin || 10) * 60000;
-        state.limit.left = Math.max(0, (state.limit.left || 1) - 1);
-      }
-      try { localStorage.removeItem('mg-draft-' + TOKEN); } catch (e) {}
-      render();
-      var fb = document.getElementById('fb');
-      fb.classList.add('flash');
-      fb.scrollTop = 0;
-      if (window.innerWidth < 640) fb.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      var s2 = document.getElementById('status');
-      if (state.pending) s2.textContent = 'You reached your goal! Your teacher will give you final feedback.';
-      else if (!state.done) s2.textContent = 'Submitted! Read the feedback, then keep revising.';
-      if (state.done) LIVE.asking = false;
-      liveSend();
-    }, function (err) {
-      btn.disabled = false; ta.readOnly = false;
-      st.className = 'status err';
-      var msg = String(err && err.message || err);
-      if (msg.indexOf('LIMIT: ') === 0) st.textContent = msg.slice(7);
-      else if (msg.indexOf('CLOSED: ') === 0) {
-        st.textContent = msg.slice(8);
-        btn.style.display = 'none'; ta.readOnly = true;
-        if (state.due) state.due.closed = true;
-      }
-      else st.textContent = 'Something went wrong. Your text is still here. Try again, or tell your teacher. (' + msg + ')';
+      submitFailed('The server is busy right now. Your essay is still here and was not counted. Wait one minute, then press Submit again. If it happens again, tell Mr. Cha. (' + msg + ')');
     });
+  });
+}
+// 제출 횟수가 늘었는지 확인 → 늘었으면 새 페이지 데이터, 아니면 null
+function checkArrived(before, left, done) {
+  setTimeout(function () {
+    call('revGetPageData', [TOKEN], function (data) {
+      if (data && ((data.count || 0) > before || data.pending || (data.firstPending && !state.firstPending))) return done(data);
+      if (left > 1) checkArrived(before, left - 1, done); else done(null);
+    }, function () {
+      if (left > 1) checkArrived(before, left - 1, done); else done(null);
+    });
+  }, 15000);
+}
+function submitFailed(text, plain) {
+  var btn = document.getElementById('submit'), ta = document.getElementById('essay'), st = document.getElementById('status');
+  if (btn) btn.disabled = false; if (ta) ta.readOnly = false;
+  if (st) { st.className = 'status err'; st.textContent = text; }
 }
 
 // ── 실시간: 선생님 수업 모니터로 보내기 ──
@@ -941,7 +996,7 @@ function status(msg) {
   if (s) { s.className = 'status'; s.textContent = msg; }
 }
 
-call('revGetPageData', [TOKEN], function (data) {
+callRetry('revGetPageData', [TOKEN], function (data) {
     if (!data) {
       document.getElementById('app').innerHTML =
         '<div class="center">This link does not work anymore.<br><br>' +

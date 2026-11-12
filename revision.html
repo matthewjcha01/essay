@@ -943,7 +943,7 @@ function submitFailed(text, plain) {
 //   고치는 중이면 1.5초 뒤(최대 5초마다), 아무것도 안 해도 15초마다, 질문 중이면 3.5초마다.
 var LIVE = { busy: false, again: false, t: null, lastInput: Date.now(), lastSent: 0, started: false,
              ok: false, asking: false, askSend: undefined, replyT: 0, lastReply: '',
-             pastes: 0, aways: 0, hiddenAt: 0 };
+             pastes: 0, aways: 0, hiddenAt: 0, lastOk: 0, askAt: 0, lostShown: false };
 var KO = /[ᄀ-ᇿ㄰-㆏가-힯]/g;
 
 function livePayload() {
@@ -977,6 +977,10 @@ function liveSend() {
     LIVE.busy = false;
     if (r && r.stale) { liveStale(); return; }   // ★이 창은 옛날 화면 (다른 창에서 이미 더 제출함)
     if (r && r.ok) {
+      LIVE.lastOk = Date.now();
+      if (LIVE.lostShown) { LIVE.lostShown = false; status('Connected to Mr. Cha again.'); }
+      // ★질문이 선생님께 실제로 도착했는지 확인해서 알려 줌 (예전엔 보내기만 하고 무조건 'Sent!')
+      if (typeof sentAsk === 'string' && r.ask) { LIVE.askAt = 0; status('Mr. Cha got your question. Keep revising while you wait.'); }
       if (!LIVE.ok) { LIVE.ok = true; drawAsk(); }
       if (r.reply && r.reply.t > LIVE.replyT) {
         var fresh = LIVE.replyT > 0 || LIVE.asking || Date.now() - r.reply.t < 10 * 60000;
@@ -1015,6 +1019,19 @@ function liveStart() {
   try { LIVE.replyT = Number(localStorage.getItem('mg-rep-' + TOKEN)) || 0; } catch (e) {}
   liveSend();
   setInterval(function () {
+    var now = Date.now();
+    // ★연결 지킴이: 응답이 30초 넘게 안 오면 다시 보낼 수 있게 풀어 줌 (안 그러면 질문·답장이 영영 멈춤)
+    if (LIVE.busy && now - LIVE.lastSent > 30000) LIVE.busy = false;
+    if (LIVE.askAt && now - LIVE.askAt > 25000) {
+      LIVE.askAt = 0;
+      var st0 = document.getElementById('status');
+      if (st0) { st0.className = 'status err'; st0.textContent = 'Your question has not reached Mr. Cha yet. Reload this page (your essay is saved) and press Ask again, or raise your hand.'; }
+    }
+    if (!LIVE.lostShown && LIVE.lastOk && now - LIVE.lastOk > 60000 && !document.hidden) {
+      LIVE.lostShown = true;
+      var st1 = document.getElementById('status');
+      if (st1) { st1.className = 'status err'; st1.textContent = 'The connection to Mr. Cha was lost. Mr. Cha cannot see your essay or your questions. Reload this page — your essay is saved.'; }
+    }
     if (LIVE.asking || LIVE.askSend !== undefined) { if (Date.now() - LIVE.lastSent > 3500) liveSend(); }
     else if (Date.now() - LIVE.lastSent > 15000) liveSend();
   }, 1000);
@@ -1043,10 +1060,10 @@ function askClick() {
 }
 function askSend() {
   var q = document.getElementById('askIn').value.replace(KO, '').replace(/\s+/g, ' ').trim();
-  LIVE.asking = true; LIVE.askSend = q; drawAsk();
+  LIVE.asking = true; LIVE.askSend = q; LIVE.askAt = Date.now(); drawAsk();
   document.getElementById('askBox').style.display = 'none';
   liveSend();
-  status('Sent! Keep revising — Mr. Cha will look at your essay.');
+  status('Sending your question to Mr. Cha…');
 }
 function showReply(msg, quiet) {
   LIVE.lastReply = msg;

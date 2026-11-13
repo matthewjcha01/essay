@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>window.API_URL = "https://script.google.com/macros/s/AKfycbyZVv25-zBxV0-CCebo2sy9l4cRX0QmpOkS1VW5pK2IYeSWTReGFhfjVoPgspVn-uhv-g/exec";</script>
 <title>Mind Grove Revision</title>
-<script src="https://matthewjcha01.github.io/essay/outline.js?v=2"></script>
+<script src="https://matthewjcha01.github.io/essay/outline.js?v=3"></script>
 <style>
   :root {
     --bg: #F6F5F1;
@@ -729,6 +729,14 @@ function render() {
   }
   if (state.pending || state.firstPending) {
     ta.readOnly = true; btn.style.display = 'none';
+  } else if (state.olFirst && !state.done && window.MGOutline) {
+    // ★아웃라인 먼저: 선생님이 아웃라인부터 하라고 한 학생 — 전부 초록이 될 때까지 에세이 잠김
+    ta.readOnly = true; btn.style.display = 'none';
+    var ob = el('div', 'tnote');
+    ob.appendChild(el('div', 'label', 'Step 1: Your outline'));
+    ob.appendChild(el('div', null, 'Mr. Cha wants you to plan your essay again before you revise it. ' +
+      'Fix your outline on the left until every box is green. Then your essay opens here.'));
+    ed.insertBefore(ob, ed.children[1] || null);
   } else if (closed && !state.done) {
     ta.readOnly = true; btn.style.display = 'none';
     var cb = el('div', 'closed');
@@ -782,6 +790,7 @@ function callRaw(fn, args, ok, fail) {     // ol* 함수는 { result: … } 로 
 }
 function olLoad() {
   if (!window.MGOutline || !state || !state.full) return;
+  if (state.olFirst && !state.done && !VIEW) { OLR.tab = 'ol'; OLR.mode = 'edit'; }   // ★아웃라인 먼저
   callRaw('olRevGet', [TOKEN], function (o) {
     if (o && !o.err) { OLR.data = o.data; OLR.result = o.result; OLR.type = o.type || 'basic'; OLR.count = o.count || 0; }
     OLR.loaded = true;
@@ -790,6 +799,7 @@ function olLoad() {
 }
 function olTabs(fbBox) {
   if (!window.MGOutline || !state.full) return fbBox;
+  if (state.olFirst && !state.done && !VIEW && OLR.mode !== 'edit') { OLR.tab = 'ol'; OLR.mode = 'edit'; }
   var tabs = el('div', 'tabs');
   var b1 = el('button', null, 'Feedback'), b2 = el('button', null, '🗺 My outline');
   b1.type = b2.type = 'button';
@@ -813,17 +823,30 @@ function drawOutlineTab(area) {
   if (OLR.mode === 'edit') {
     MGOutline.editor(area, {
       type: OLR.type, data: OLR.data, result: OLR.result, count: OLR.count, narrow: true,
-      question: state.prompt, store: 'mg-ol-' + TOKEN, title: OLR.data ? 'Revise your outline' : 'Make your outline',
-      intro: 'Use your outline as the map for your essay. When every box is green, your plan is clear.',
-      passLabel: 'Done', cancelLabel: 'Back to my outline',
+      question: state.prompt, store: 'mg-ol-' + TOKEN,
+      title: state.olFirst ? 'Step 1 — Fix your outline' : OLR.data ? 'Revise your outline' : 'Make your outline',
+      intro: state.olFirst
+        ? 'Before you revise, plan your essay again. Fill in each box with the guide next to it, then press "Check my outline". ' +
+          'When every box is green, your essay opens. Keep your essay on this map when you revise.'
+        : 'Use your outline as the map for your essay. When every box is green, your plan is clear.',
+      passLabel: state.olFirst ? 'Revise my essay →' : 'Done', cancelLabel: 'Back to my outline',
       onSubmit: function (data, warned, done) {
         callRaw('olSubmit', ['', JSON.stringify({ rev: TOKEN }), JSON.stringify(data), JSON.stringify(warned)], function (r) {
           if (r.ok) { OLR.data = r.data || data; OLR.result = r.result; OLR.count = r.count; }
           done(r);
         }, function () { done({ err: 'Connection error. Please press the button again.' }); });
       },
-      onPass: function () { OLR.mode = 'view'; drawOutlineTab(area); },
-      onCancel: function () { OLR.mode = 'view'; drawOutlineTab(area); }
+      onPass: function () {
+        OLR.mode = 'view';
+        if (state.olFirst) {             // ★아웃라인 먼저 → 통과: 에세이 열기
+          state.olFirst = false; OLR.tab = 'ol';
+          render();
+          status('Your outline passed! Now revise your essay. Your outline stays in the "My outline" tab.');
+          return;
+        }
+        drawOutlineTab(area);
+      },
+      onCancel: state.olFirst ? null : function () { OLR.mode = 'view'; drawOutlineTab(area); }
     });
     return;
   }

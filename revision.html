@@ -758,17 +758,20 @@ function render() {
     cnt.textContent = wordCount(ta.value) + ' words';
     try { localStorage.setItem('mg-draft-' + TOKEN, ta.value); } catch (e) {}
     LIVE.lastInput = Date.now(); liveSoon();
+    actInput(ta);
   });
   // 붙여넣기는 글자만 (다른 곳의 글꼴·색이 섞이지 않게)
   ta.addEventListener('paste', function (e) {
     LIVE.pastes++;
     var t = (e.clipboardData || window.clipboardData);
+    actPaste(t ? t.getData('text/plain').length : 0);
     if (t) { e.preventDefault(); document.execCommand('insertText', false, t.getData('text/plain')); }
     liveSoon();
   });
   drawAsk();
   if (LIVE.lastReply) showReply(LIVE.lastReply, true);
   btn.addEventListener('click', submit);
+  actBind(ta);
   if (VIEW) {
     ta.readOnly = true; btn.style.display = 'none'; ask.style.display = 'none';
     var vb = el('div', 'tnote');
@@ -929,7 +932,8 @@ function showSubmitted() {
 //  4) 그래도 안 되면 → 글은 그대로 두고 친절한 영어 안내
 function sendRevision(text, before, attempt) {
   var st = document.getElementById('status');
-  call('revSubmit', [TOKEN, text], function (res) {
+  call('revSubmit', [TOKEN, text, actPayload()], function (res) {
+    actReset();
     afterSubmit(res, text);
   }, function (err) {
     var msg = String(err && err.message || err);
@@ -945,7 +949,7 @@ function sendRevision(text, before, attempt) {
     var checks = err && err.server ? 1 : 8;
     if (st) { st.className = 'status'; st.innerHTML = '<span class="spin"></span>The connection was slow. Checking whether your essay arrived… Do not close this page.'; }
     checkArrived(before, checks, function (data) {
-      if (data) { state = data; state.essay = text; showSubmitted(); return; }
+      if (data) { actReset(); state = data; state.essay = text; showSubmitted(); return; }
       if (attempt < 1) {
         if (st) st.innerHTML = '<span class="spin"></span>Sending your essay again… this takes about ' + (state.formal ? '1–2 minutes' : '30 seconds') + '. Do not close this page.';
         setTimeout(function () { sendRevision(text, before, attempt + 1); }, 4000);
@@ -970,6 +974,103 @@ function submitFailed(text, plain) {
   var btn = document.getElementById('submit'), ta = document.getElementById('essay'), st = document.getElementById('status');
   if (btn) btn.disabled = false; if (ta) ta.readOnly = false;
   if (st) { st.className = 'status err'; st.textContent = text; }
+}
+
+// ── 고친 과정 기록 (선생님 '고친 과정' 화면용) ──
+//   제출과 제출 사이에: 화면을 열어 둔 시간, 실제로 고친 분, 입력·삭제 글자 수, 방문, 화면 이탈, 붙여넣기.
+//   이 기기에 임시로 모아 두었다가 제출할 때 함께 보냄 (제출하면 비움). 글 내용은 여기 담지 않음.
+var ACT = null, ACT_EL = null, ACT_PREV = '', ACT_PASTE = 0, ACT_DIRTY = false;
+function actKey() { return 'mg-act-' + TOKEN; }
+function actNow() { return Math.floor(Date.now() / 1000); }
+function actNew() {
+  return { v: 1, n: state ? state.count || 0 : 0, start: actNow(), open: 0,
+           ins: 0, del: 0, big: 0, bigCh: 0, pastes: 0, pasteCh: 0, aways: 0, awaySec: 0,
+           visits: [], min: {} };
+}
+function actStart() {
+  if (VIEW || !state || state.done) return;
+  try { ACT = JSON.parse(localStorage.getItem(actKey()) || 'null'); } catch (e) { ACT = null; }
+  // 지난 회차(이 기기에서 그 뒤에 다른 기기로 제출함)의 기록이면 버림
+  if (!ACT || ACT.v !== 1 || ACT.n !== (state.count || 0)) ACT = actNew();
+  if (ACT.visits.length >= 60) ACT.visits.splice(0, ACT.visits.length - 59);
+  ACT.visits.push([actNow(), actNow()]);
+  ACT_DIRTY = true; actSave();
+  if (!actStart.hooked) { actStart.hooked = true; window.addEventListener('pagehide', actSave); }
+}
+function actBind(ta) {
+  if (!ta) return;
+  ACT_EL = ta; ACT_PREV = ta.innerText || '';
+}
+function actMin(t) {
+  var k = String(Math.floor((t || Date.now()) / 60000));
+  if (!ACT.min[k]) {
+    var keys = Object.keys(ACT.min);
+    if (keys.length >= 3000) delete ACT.min[keys[0]];
+    ACT.min[k] = [0, 0];
+  }
+  return ACT.min[k];
+}
+function actInput(ta) {
+  if (!ACT || VIEW) return;
+  if (ACT_EL !== ta) actBind(ta);
+  var now = ta.innerText || '', old = ACT_PREV;
+  ACT_PREV = now;
+  // 앞뒤 같은 부분을 빼고 남은 만큼이 이번에 넣고 지운 글자
+  var a = 0, la = old.length, lb = now.length;
+  while (a < la && a < lb && old.charCodeAt(a) === now.charCodeAt(a)) a++;
+  var z = 0;
+  while (z < la - a && z < lb - a && old.charCodeAt(la - 1 - z) === now.charCodeAt(lb - 1 - z)) z++;
+  var added = lb - a - z, removed = la - a - z;
+  if (added <= 0 && removed <= 0) return;
+  var m = actMin();
+  if (ACT_PASTE && Date.now() - ACT_PASTE < 1500) {
+    ACT_PASTE = 0; ACT.pasteCh += Math.max(0, added);      // 붙여넣은 글자는 '입력'에 넣지 않음
+  } else {
+    if (added >= 25) { ACT.big++; ACT.bigCh += added; }    // 한 번에 많이 들어옴 (자동완성·받아쓰기 등)
+    ACT.ins += Math.max(0, added); m[0] += Math.max(0, added);
+  }
+  ACT.del += Math.max(0, removed); m[1] += Math.max(0, removed);
+  ACT_DIRTY = true;
+}
+function actPaste(len) {
+  if (!ACT || VIEW) return;
+  ACT.pastes++; ACT_PASTE = Date.now(); ACT_DIRTY = true;
+}
+function actAway(ms) {
+  if (!ACT) return;
+  ACT.aways++; ACT.awaySec += Math.round(ms / 1000); ACT_DIRTY = true; actSave();
+}
+var ACT_LASTSAVE = 0;
+function actTick() {
+  if (!ACT) return;
+  var ta = document.getElementById('essay');
+  // 화면이 보이고, 고칠 수 있는 상태일 때만 '열어 둔 시간'으로 셈
+  if (!document.hidden && ta && !ta.readOnly) {
+    ACT.open++;
+    var v = ACT.visits[ACT.visits.length - 1]; if (v) v[1] = actNow();
+    ACT_DIRTY = true;
+  }
+  if (ACT_DIRTY && Date.now() - ACT_LASTSAVE > 5000) actSave();
+}
+function actSave() {
+  if (!ACT) return;
+  ACT_LASTSAVE = Date.now(); ACT_DIRTY = false;
+  try { localStorage.setItem(actKey(), JSON.stringify(ACT)); } catch (e) {}
+}
+function actPayload() {
+  if (!ACT) return '';
+  actSave();
+  var p = JSON.parse(JSON.stringify(ACT));
+  p.end = actNow();
+  return JSON.stringify(p);
+}
+function actReset() {
+  try { localStorage.removeItem(actKey()); } catch (e) {}
+  ACT = null;
+  if (state && !VIEW) {
+    // 다음 회차 기록 시작 (점수 대기·완료면 여기서 멈춤)
+    setTimeout(function () { if (state && !state.done && !state.pending) actStart(); }, 0);
+  }
 }
 
 // ── 실시간: 선생님 수업 모니터로 보내기 ──
@@ -1053,6 +1154,7 @@ function liveStart() {
   liveSend();
   setInterval(function () {
     var now = Date.now();
+    actTick();
     // ★연결 지킴이: 응답이 30초 넘게 안 오면 다시 보낼 수 있게 풀어 줌 (안 그러면 질문·답장이 영영 멈춤)
     if (LIVE.busy && now - LIVE.lastSent > 30000) LIVE.busy = false;
     if (LIVE.askAt && now - LIVE.askAt > 25000) {
@@ -1070,8 +1172,12 @@ function liveStart() {
   }, 1000);
   // 5초 이상 다른 화면에 갔다 오면 '화면 이탈' 1회 (선생님 화면 참고용)
   document.addEventListener('visibilitychange', function () {
-    if (document.hidden) LIVE.hiddenAt = Date.now();
-    else if (LIVE.hiddenAt) { if (Date.now() - LIVE.hiddenAt >= 5000) LIVE.aways++; LIVE.hiddenAt = 0; liveSoon(); }
+    if (document.hidden) { LIVE.hiddenAt = Date.now(); actSave(); }
+    else if (LIVE.hiddenAt) {
+      var gone = Date.now() - LIVE.hiddenAt;
+      if (gone >= 5000) { LIVE.aways++; actAway(gone); }
+      LIVE.hiddenAt = 0; liveSoon();
+    }
   });
 }
 function drawAsk() {
@@ -1125,12 +1231,13 @@ callRetry('revGetPageData', [TOKEN], function (data) {
       if (saved && saved.trim() && saved !== state.essay) state.essayUnsaved = saved;
     } catch (e) {}
     render();
-    if (!VIEW) liveStart();
+    if (!VIEW) { actStart(); liveStart(); }
     olLoad();
     if (state.essayUnsaved) {
       document.getElementById('essay').value = state.essayUnsaved;
       document.getElementById('status').textContent = 'We restored the changes you had not submitted yet.';
       document.querySelector('.count').textContent = wordCount(state.essayUnsaved) + ' words';
+      actBind(document.getElementById('essay'));
     }
   }, function (err) {
     document.getElementById('app').innerHTML = '';

@@ -1087,6 +1087,7 @@ function livePayload() {
   return {
     text: text, wc: wordCount(text), base: state ? String(state.essay || '') : '',
     idle: Math.round((Date.now() - LIVE.lastInput) / 1000),
+    msgRead: LIVE.msgRead || 0,
     pastes: LIVE.pastes, aways: LIVE.aways,
     score: state && state.score != null ? state.score : null, letter: state ? state.letter || '' : '',
     pass: state ? state.passScore || 0 : 0, count: state ? state.count || 0 : 0,
@@ -1107,6 +1108,7 @@ function liveSend() {
   var p = livePayload();
   var sentAsk = LIVE.askSend; LIVE.askSend = undefined;
   if (sentAsk !== undefined) p.ask = sentAsk;
+  LIVE.msgSent = p.msgRead || 0;
   call('revLive', [TOKEN, JSON.stringify(p)], function (r) {
     LIVE.busy = false;
     if (r && r.stale) { liveStale(); return; }   // ★이 창은 옛날 화면 (다른 창에서 이미 더 제출함)
@@ -1120,8 +1122,9 @@ function liveSend() {
         var fresh = LIVE.replyT > 0 || LIVE.asking || Date.now() - r.reply.t < 10 * 60000;
         LIVE.replyT = r.reply.t;
         try { localStorage.setItem('mg-rep-' + TOKEN, String(r.reply.t)); } catch (e) {}
-        if (fresh) showReply(r.reply.msg);
+        if (fresh) { showReply(r.reply.msg); LIVE.msgRead = r.reply.t; }
       }
+      if (LIVE.msgSent && LIVE.msgSent === LIVE.msgRead) LIVE.msgRead = 0;   // 읽음 전달됨
       // 선생님이 답장했거나 '확인'을 눌렀으면 기다림 끝
       if (LIVE.asking && !r.ask && sentAsk === undefined && LIVE.askSend === undefined) { LIVE.asking = false; drawAsk(); }
     } else if (sentAsk !== undefined && LIVE.askSend === undefined) LIVE.askSend = sentAsk;
@@ -1212,6 +1215,22 @@ function showReply(msg, quiet) {
   bar.style.display = 'flex';
   if (!quiet) { bar.classList.remove('flash'); void bar.offsetWidth; bar.classList.add('flash'); }
 }
+// ★선생님 메시지 (모니터에서 접속하지 않았을 때 보낸 것도) — 페이지를 열면 맨 위에
+function teacherMsgOnLoad() {
+  var m = state && state.teacherMsg;
+  if (!m || !m.msg) return;
+  var seen = 0;
+  try { seen = Number(localStorage.getItem('mg-rep-' + TOKEN)) || 0; } catch (e) {}
+  if (VIEW) { showReply(m.msg, true); return; }
+  if (m.t > seen) {
+    LIVE.replyT = m.t;
+    try { localStorage.setItem('mg-rep-' + TOKEN, String(m.t)); } catch (e) {}
+    showReply(m.msg);
+    LIVE.msgRead = m.t; liveSoon();
+  } else if (Date.now() - m.t < 2 * 86400000) {
+    showReply(m.msg, true);          // 이미 읽은 것도 이틀 동안은 조용히 보여 줌
+  }
+}
 function status(msg) {
   var s = document.getElementById('status');
   if (s) { s.className = 'status'; s.textContent = msg; }
@@ -1232,6 +1251,7 @@ callRetry('revGetPageData', [TOKEN], function (data) {
     } catch (e) {}
     render();
     if (!VIEW) { actStart(); liveStart(); }
+    teacherMsgOnLoad();
     olLoad();
     if (state.essayUnsaved) {
       document.getElementById('essay').value = state.essayUnsaved;

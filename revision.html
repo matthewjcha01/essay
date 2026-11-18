@@ -143,6 +143,11 @@
   .tabs button { background: none; color: var(--muted); border: 0; border-bottom: 3px solid transparent; border-radius: 0;
                  padding: 6px 10px; min-height: 0; width: auto; font-weight: 700; }
   .tabs button.on { color: var(--accent); border-bottom-color: var(--accent); }
+  /* ★넓은 화면: 피드백 | 내 아웃라인 | 내 글 — 세 칸이 늘 함께 보임 (아웃라인을 고칠 땐 가운데 칸이 넓어짐) */
+  body.wide3 .wrap { max-width: 1760px; }
+  .grid.three { grid-template-columns: minmax(0, 4fr) minmax(0, 4fr) minmax(0, 5fr); }
+  .grid.three.oledit { grid-template-columns: minmax(0, 3fr) minmax(0, 6fr) minmax(0, 5fr); }
+  .olcol { overflow: auto; min-height: 0; }
   .olbar { display: flex; gap: 8px; align-items: center; margin: 0 0 10px; flex-wrap: wrap; }
   .olbar .t { flex: 1; color: var(--muted); font-size: 13px; }
   .olbar button { padding: 6px 12px; min-height: 0; width: auto; font-size: 14px; }
@@ -648,12 +653,23 @@ function render() {
 
   var grid = el('div', 'grid');
   var fbBox = el('section', 'panel fb'); fbBox.id = 'fb';
-  var fbArea = olTabs(fbBox);   // ★원서 에세이: 피드백 | 내 아웃라인 탭
+  var fbArea = olTabs(fbBox);   // ★원서 에세이: 피드백 | 내 아웃라인 탭 (넓은 화면은 탭 없이 가운데 칸)
   if (state.pending) renderPending(fbArea);
   else if (state.firstPending) renderFirstPending(fbArea);
   else if (state.feedback) renderFeedback(fbArea, state.feedback, state.count);
   else renderGoalsOnly(fbArea, state.goals);
   grid.appendChild(fbBox);
+  // ★넓은 화면: 아웃라인을 가운데 칸에 늘 보이게
+  lastWide = wide3();
+  document.body.classList.toggle('wide3', lastWide);
+  if (lastWide) {
+    grid.classList.add('three');
+    var olBox = el('section', 'panel olcol');
+    olBox.appendChild(el('h2', null, '🗺 My outline'));
+    var olA = el('div'); olA.id = 'olArea'; olBox.appendChild(olA);
+    grid.appendChild(olBox);
+    drawOutlineTab(olA);
+  }
 
   var ed = el('section', 'panel editor');
   ed.appendChild(el('h2', null, 'Your essay'));
@@ -735,7 +751,8 @@ function render() {
     var ob = el('div', 'tnote');
     ob.appendChild(el('div', 'label', 'Step 1: Your outline'));
     ob.appendChild(el('div', null, 'Mr. Cha wants you to plan your essay again before you revise it. ' +
-      'Fix your outline on the left until every box is green. Then your essay opens here.'));
+      (lastWide ? 'Fix your outline in the middle until every box is green. Then your essay opens here.'
+                : 'Fix your outline on the left until every box is green. Then your essay opens here.')));
     ed.insertBefore(ob, ed.children[1] || null);
   } else if (closed && !state.done) {
     ta.readOnly = true; btn.style.display = 'none';
@@ -797,11 +814,32 @@ function olLoad() {
   callRaw('olRevGet', [TOKEN], function (o) {
     if (o && !o.err) { OLR.data = o.data; OLR.result = o.result; OLR.type = o.type || 'basic'; OLR.count = o.count || 0; }
     OLR.loaded = true;
-    var a = document.getElementById('olArea'); if (a && OLR.tab === 'ol') drawOutlineTab(a);
+    var a = document.getElementById('olArea'); if (a && (OLR.tab === 'ol' || wide3())) drawOutlineTab(a);
   }, function () { OLR.loaded = true; OLR.err = true; });
+}
+// ★세 칸으로 볼 만큼 넓은 화면인가 (좁으면 지금처럼 탭)
+var lastWide = null;
+function wide3() { return !!(window.MGOutline && state && state.full && window.innerWidth >= 1150); }
+var relayT = null;
+window.addEventListener('resize', function () {
+  if (!state || lastWide === null) return;
+  clearTimeout(relayT);
+  relayT = setTimeout(function () { if (wide3() !== lastWide) relayout(); }, 300);
+});
+// 칸 모양만 바꿔 다시 그림 — 고치던 글은 그대로 (아웃라인을 고치던 칸은 outline.js 가 임시 저장)
+function relayout() {
+  var ta = document.getElementById('essay');
+  var v = ta && !ta.readOnly ? ta.value : null;
+  render();
+  var t2 = document.getElementById('essay');
+  if (t2 && v != null && !t2.readOnly && v !== t2.value) {
+    t2.value = v;
+    var c = document.querySelector('.count'); if (c) c.textContent = wordCount(v) + ' words';
+  }
 }
 function olTabs(fbBox) {
   if (!window.MGOutline || !state.full) return fbBox;
+  if (wide3()) return fbBox;
   if (state.olFirst && !state.done && !VIEW && OLR.mode !== 'edit') { OLR.tab = 'ol'; OLR.mode = 'edit'; }
   var tabs = el('div', 'tabs');
   var b1 = el('button', null, 'Feedback'), b2 = el('button', null, '🗺 My outline');
@@ -822,6 +860,8 @@ function olTabs(fbBox) {
 }
 function drawOutlineTab(area) {
   area.innerHTML = '';
+  var g3 = document.querySelector('.grid.three');
+  if (g3) g3.classList.toggle('oledit', OLR.mode === 'edit');
   if (!OLR.loaded) { area.appendChild(el('div', 'hint', OLR.err ? 'Could not load your outline. Refresh the page.' : 'Loading your outline…')); return; }
   if (OLR.mode === 'edit') {
     MGOutline.editor(area, {
@@ -844,7 +884,8 @@ function drawOutlineTab(area) {
         if (state.olFirst) {             // ★아웃라인 먼저 → 통과: 에세이 열기
           state.olFirst = false; OLR.tab = 'ol';
           render();
-          status('Your outline passed! Now revise your essay. Your outline stays in the "My outline" tab.');
+          status(lastWide ? 'Your outline passed! Now revise your essay. Your outline stays next to your essay.'
+                          : 'Your outline passed! Now revise your essay. Your outline stays in the "My outline" tab.');
           return;
         }
         drawOutlineTab(area);

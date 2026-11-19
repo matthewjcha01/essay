@@ -89,6 +89,8 @@
   .marked mark { border-radius: 2px; padding: 0 1px; color: inherit; }
   .marked mark.fix { background: #fcd9d6; } .marked mark.check { background: #ffeaa8; } .marked mark.good { background: #d4efdc; }
   .marked sup { font: 700 10px -apple-system, sans-serif; color: var(--muted); margin-left: 1px; }
+  /* 문장 표시 안에 들어간 작은 표시 (문법·철자 등) — 바깥 색 위에 밑줄로 구분 */
+  .marked mark mark { padding: 0; box-shadow: inset 0 -2px 0 rgba(0,0,0,.45); }
   .notes { margin: 2px 0 12px; padding: 0; list-style: none; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", sans-serif; }
   .notes li { display: flex; gap: 8px; padding: 6px 0; border-top: 1px dashed var(--line); }
   .notes .n { flex: 0 0 auto; font-weight: 800; color: var(--muted); min-width: 18px; }
@@ -227,19 +229,31 @@ function parseRich(src) {
 function richHtml(src, ranges) {
   var p = parseRich(src), out = '', cs = 0, cm = -1, n = p.t.length;
   ranges = ranges || [];
-  function at(k) { for (var r = 0; r < ranges.length; r++) if (k >= ranges[r].s && k < ranges[r].e) return r; return -1; }
+  // 겹치면 가장 작은(안쪽) 표시가 이김. 안쪽 표시는 parent(바깥 표시)를 가질 수 있음
+  function at(k) {
+    var best = -1;
+    for (var r = 0; r < ranges.length; r++)
+      if (k >= ranges[r].s && k < ranges[r].e && (best < 0 || ranges[r].e - ranges[r].s < ranges[best].e - ranges[best].s)) best = r;
+    return best;
+  }
+  function openR(r) { var R = ranges[r]; return (R.parent ? R.parent.open : '') + R.open; }
+  function closeR(r, k) {      // 번호(after)는 그 표시가 정말 끝나는 자리에서만
+    var R = ranges[r], o = R.close + (k >= R.e ? R.after || '' : '');
+    if (R.parent) o += R.parent.close + (k >= R.parent.e ? R.parent.after || '' : '');
+    return o;
+  }
   function openS(s) { return (s & 1 ? '<b>' : '') + (s & 2 ? '<i>' : '') + (s & 4 ? '<u>' : ''); }
   function closeS(s) { return (s & 4 ? '</u>' : '') + (s & 2 ? '</i>' : '') + (s & 1 ? '</b>' : ''); }
   for (var k = 0; k < n; k++) {
     var s = p.st[k], mk = at(k);
     if (k === 0 || s !== cs || mk !== cm) {
-      if (k > 0) { out += closeS(cs); if (cm >= 0) out += ranges[cm].close + (mk !== cm ? ranges[cm].after || '' : ''); }
-      if (mk >= 0) out += ranges[mk].open;
+      if (k > 0) { out += closeS(cs); if (cm >= 0) out += closeR(cm, k); }
+      if (mk >= 0) out += openR(mk);
       out += openS(s); cs = s; cm = mk;
     }
     out += esc(p.t.charAt(k));
   }
-  if (n) { out += closeS(cs); if (cm >= 0) out += ranges[cm].close + (ranges[cm].after || ''); }
+  if (n) { out += closeS(cs); if (cm >= 0) out += closeR(cm, n); }
   return out;
 }
 // 코멘트 인용을 글자 위치로 찾기 (겹치면 표시는 건너뜀)
@@ -363,7 +377,8 @@ function renderGoalsOnly(box, goals) {
     box.appendChild(tn0);
   }
   if (fr && fr.topic_warning) box.appendChild(el('div', 'warn', '⚠ ' + fr.topic_warning));
-  if (fr && fr.annotations && fr.annotations.length) renderMarked(box, fr.annotations, state.essay);
+  var frGram = state.full && fr && fr.grammar ? (fr.grammar.remaining || []) : [];
+  var frPut = (fr && fr.annotations && fr.annotations.length) ? renderMarked(box, fr.annotations, state.essay, frGram) : null;
   if (fr && goals.length) box.appendChild(el('h3', null, 'Your goals'));
   goals.forEach(function (g, i) {
     var d = el('div', 'goal');
@@ -388,7 +403,8 @@ function renderGoalsOnly(box, goals) {
     box.appendChild(el('p', null, state.grammar));
   } else if (state.full && fr && fr.grammar && fr.grammar.focus) {
     box.appendChild(el('h3', null, 'Grammar check: ' + fr.grammar.focus));
-    var gl = (fr.grammar.remaining || []).filter(function (x) { return x; });
+    var gl = (frPut ? frPut.left : (fr.grammar.remaining || [])).filter(function (x) { return x; });
+    if (frPut && frPut.placed) box.appendChild(el('p', 'hint', 'These are marked in your essay above — look for “Grammar.”'));
     if (gl.length) {
       box.appendChild(el('p', 'hint', 'Find these in your essay and fix them yourself:'));
       var gu = el('ul'); gl.forEach(function (t) { gu.appendChild(el('li', null, '“' + t + '”')); }); box.appendChild(gu);
@@ -428,7 +444,8 @@ function renderFeedback(box, fb, count) {
   }
   if (fb.topic_warning) box.appendChild(el('div', 'warn', '⚠ ' + fb.topic_warning));
 
-  if (state.formal && fb.annotations && fb.annotations.length) renderMarked(box, fb.annotations, state.essay);
+  var fbPut = (state.formal && fb.annotations && fb.annotations.length)
+    ? renderMarked(box, fb.annotations, state.essay, (fb.grammar || {}).remaining) : null;
 
   // NGL: new goals (all 3 old goals reached, score not 10 yet) — show them first
   var newGoals = null;
@@ -486,10 +503,14 @@ function renderFeedback(box, fb, count) {
   box.appendChild(el('div', 'last', fb.one_last_thing || ''));
 
   var gr = fb.grammar || {};
-  var rem = (gr.remaining || []).filter(function (x) { return x; });
+  var rem = (fbPut ? fbPut.left : (gr.remaining || [])).filter(function (x) { return x; });
   if (newGoals) return;   // old grammar focus is done; the new one is shown with the new goals
   if (state.full && !gr.focus && !rem.length) return;
   box.appendChild(el('h3', null, '4. Grammar check' + (gr.focus ? ': ' + gr.focus : '')));
+  if (fbPut && fbPut.placed) {
+    box.appendChild(el('p', 'hint', 'These are marked in your essay above — look for “Grammar.”'));
+    if (!rem.length) return;
+  }
   if (rem.length) {
     box.appendChild(el('p', 'hint', 'Find these in your essay and fix them yourself:'));
     var ul = el('ul');
@@ -501,7 +522,10 @@ function renderFeedback(box, fb, count) {
 }
 
 // 정식 에세이: 제출한 글 위에 선생님처럼 표시 + 문단마다 코멘트
-function renderMarked(box, anns, essay) {
+// extra = 'Grammar check' 목록 (글귀만 있는 것). 글에서 찾으면 그 자리에 표시하고, 못 찾은 것만 돌려줌
+//   → { left: [못 찾은 글귀], placed: 글 안에 놓은 개수 }
+// ★번호는 Claude 가 낸 순서가 아니라 글 읽는 순서 (문단 → 문단 안 위치). 그래서 문법이 맨 뒤로 밀리지 않음
+function renderMarked(box, anns, essay, extra) {
   box.appendChild(el('h3', null, 'Comments on your essay'));
   box.appendChild(el('p', 'hint', 'Red = must fix · Yellow = think again · Green = this works. Fix them in your essay on the right.'));
   var norm = function (t) { return String(t || '').replace(/[‘’]/g, "'").replace(/[“”]/g, '"'); };
@@ -512,37 +536,74 @@ function renderMarked(box, anns, essay) {
   });
   // 빈 줄을 뺀 문단 번호 (AI 가 세는 방식)
   var real = []; paras.forEach(function (p, i) { if (p.t.trim()) real.push(i); });
-  var byPara = {}, loose = [], num = 0;
-  anns.forEach(function (a) {
-    num++; a._n = num;
-    var kind = /^(fix|check|good)$/.test(a.kind) ? a.kind : 'check'; a._k = kind;
-    var q = norm(a.quote).trim(), hit = -1, at = -1;
+  // 인용 찾기: 그대로 → 대소문자 무시 → 앞뒤 따옴표·문장부호 뺌 → 긴 인용은 첫 6단어
+  function locate(quote, order) {
+    var q = norm(quote).trim(); if (!q) return null;
+    var tries = [q];
+    var s = q.replace(/^["'\s…]+/, '').replace(/["'\s….,;:!?]+$/, '');
+    if (s && s !== q) tries.push(s);
+    var w = (s || q).split(/\s+/); if (w.length > 6) tries.push(w.slice(0, 6).join(' '));
+    for (var t = 0; t < tries.length; t++) {
+      for (var k = 0; k < order.length; k++) {
+        var txt = norm(paras[order[k]].t), pos = txt.indexOf(tries[t]);
+        if (pos === -1) pos = txt.toLowerCase().indexOf(tries[t].toLowerCase());
+        if (pos !== -1) return { hit: order[k], at: pos, len: tries[t].length };
+      }
+    }
+    return null;
+  }
+  var all = (anns || []).slice();
+  (extra || []).forEach(function (t) {
+    if (t) all.push({ kind: 'check', part: 'Grammar', quote: t, note: 'There is a mistake here. Find it and fix it yourself.', _x: true });
+  });
+  var byPara = {}, loose = [], left = [], placed = 0;
+  all.forEach(function (a, idx) {
+    a._i = idx; a._k = /^(fix|check|good)$/.test(a.kind) ? a.kind : 'check';
     var guess = real[(Number(a.para) || 0) - 1];
     var order = guess != null ? [guess].concat(real.filter(function (x) { return x !== guess; })) : real;
-    for (var k = 0; q && k < order.length; k++) {
-      var pos = norm(paras[order[k]].t).indexOf(q);
-      if (pos === -1) pos = norm(paras[order[k]].t).toLowerCase().indexOf(q.toLowerCase());
-      if (pos !== -1) { hit = order[k]; at = pos; break; }
+    var f = locate(a.quote, order);
+    if (!f) {
+      a._at = -1;
+      if (a._x) { left.push(a.quote); return; }        // 문법 목록: 못 찾으면 아래 목록에 그대로
+      if (guess != null) { a._p = guess; (byPara[guess] = byPara[guess] || []).push(a); } else loose.push(a);
+      return;
     }
-    if (hit === -1) { (guess != null ? (byPara[guess] = byPara[guess] || []) : loose).push(a); a._at = -1; return; }
-    a._at = at; a._len = q.length;
-    (byPara[hit] = byPara[hit] || []).push(a);
+    if (a._x) placed++;
+    a._at = f.at; a._len = f.len; a._p = f.hit;
+    (byPara[f.hit] = byPara[f.hit] || []).push(a);
   });
+  // 읽는 순서로 번호 매기기 — 문단 안에서는 위치 순, 못 찾은 것은 그 문단 끝, 같은 위치면 긴(바깥) 표시 먼저
+  var num = 0;
+  real.forEach(function (i) {
+    (byPara[i] || []).sort(function (x, y) {
+      var ax = x._at < 0 ? 1e9 : x._at, ay = y._at < 0 ? 1e9 : y._at;
+      return ax - ay || (y._len || 0) - (x._len || 0) || x._i - y._i;
+    }).forEach(function (a) { a._n = ++num; });
+  });
+  loose.forEach(function (a) { a._n = ++num; });
+
   var wrap = el('div', 'marked');
   real.forEach(function (i) {
-    var p = paras[i], list = (byPara[i] || []).slice();
-    var spans = list.filter(function (a) { return a._at >= 0; }).sort(function (x, y) { return x._at - y._at; });
-    var rs = [], pos = 0;
-    spans.forEach(function (a) {
-      if (a._at < pos) return;                     // 겹치면 표시는 건너뛰고 코멘트만
-      rs.push({ s: a._at, e: a._at + a._len, open: '<mark class="' + a._k + '">', close: '</mark>', after: '<sup>' + a._n + '</sup>' });
-      pos = a._at + a._len;
+    var p = paras[i], list = byPara[i] || [];
+    var rs = [];
+    list.forEach(function (a) {
+      if (a._at < 0) return;
+      var s = a._at, e = a._at + a._len;
+      var r = { s: s, e: e, open: '<mark class="' + a._k + '">', close: '</mark>', after: '<sup>' + a._n + '</sup>' };
+      // 바깥 표시 안에 쏙 들어가면 안쪽 표시로 (예: 문장 표시 안의 문법 실수)
+      var outer = null, clash = false;
+      rs.forEach(function (o) {
+        if (o.parent) { if (s < o.e && e > o.s) clash = true; return; }
+        if (s >= o.s && e <= o.e && !(s === o.s && e === o.e)) outer = o;
+        else if (s < o.e && e > o.s) clash = true;
+      });
+      if (clash) return;                            // 어긋나게 겹치면 표시는 건너뛰고 코멘트만
+      if (outer) r.parent = outer;
+      rs.push(r);
     });
-    var html = richHtml(p.raw, rs);
-    var d = el('div', 'mp' + (p.c ? ' c' : '')); d.innerHTML = html;
+    var d = el('div', 'mp' + (p.c ? ' c' : '')); d.innerHTML = richHtml(p.raw, rs);
     wrap.appendChild(d);
     if (list.length) {
-      list.sort(function (x, y) { return x._n - y._n; });
       var ul = el('ul', 'notes');
       list.forEach(function (a) { ul.appendChild(noteLi(a)); });
       wrap.appendChild(ul);
@@ -550,6 +611,7 @@ function renderMarked(box, anns, essay) {
   });
   if (loose.length) { var ul2 = el('ul', 'notes'); loose.forEach(function (a) { ul2.appendChild(noteLi(a)); }); wrap.appendChild(ul2); }
   box.appendChild(wrap);
+  return { left: left, placed: placed };
 }
 function noteLi(a) {
   var li = el('li');

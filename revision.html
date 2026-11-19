@@ -97,6 +97,7 @@
   .notes .tag { flex: 0 0 auto; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 1px 8px; height: fit-content; }
   .tag.fix { background: var(--no-bg); color: var(--no); } .tag.check { background: var(--mid-bg); color: var(--mid); }
   .tag.good { background: var(--ok-bg); color: var(--ok); }
+  .notes .tag.tch { background: #e8eef6; color: #1a5490; margin-left: auto; white-space: nowrap; }
   /* 에세이 편집기 — 쓰기 페이지처럼 MLA 모양 (Times New Roman, 두 줄 간격, 문단 들여쓰기) */
   .tools { display: flex; gap: 6px; margin-bottom: 8px; align-items: center; flex-wrap: wrap; }
   .tool { width: 38px; height: 34px; min-height: 0; padding: 0; border: 1px solid var(--line); background: var(--card);
@@ -619,6 +620,7 @@ function noteLi(a) {
   li.appendChild(el('span', 'tag ' + a._k, (a.part || '') + (a._k === 'fix' ? ' · fix' : a._k === 'good' ? ' · good' : ' · check')));
   var t = el('span', null, (a._at === -1 && a.quote ? '“' + a.quote + '” — ' : '') + (a.note || ''));
   li.appendChild(t);
+  if (a.teacher) { var tc = el('span', 'tag tch', '✓ Mr. Cha'); tc.title = 'Your teacher checked this comment.'; li.appendChild(tc); }
   return li;
 }
 
@@ -662,6 +664,28 @@ function renderPending(box) {
   w.appendChild(el('p', 'hint', 'This page updates by itself. You can keep it open.'));
   box.appendChild(w);
   startPolling();
+}
+
+// ★선생님이 색을 바꾼 뒤: 새 코멘트·점수를 받아 왼쪽만 다시 그림
+function teacherRecolored() {
+  call('revGetPageData', [TOKEN], function (d) {
+    if (!d) return;
+    if (d.pending || d.done || d.closedByTeacher) {      // 목표 점수 도달 → 기다리는 화면으로 (글은 이미 낸 것)
+      state = d; render(); document.getElementById('fb').classList.add('flash'); return;
+    }
+    ['feedback', 'score', 'letter', 'firstScore', 'firstLetter', 'teacherNote', 'fbAt', 'passScore', 'passLetter'].forEach(function (k) {
+      if (k in d) state[k] = d[k];
+    });
+    if (d.firstReview) state.firstReview = d.firstReview;
+    var area = document.querySelector('[data-fbarea]');
+    if (!area) return;
+    var keep = area.scrollTop;
+    area.innerHTML = '';
+    if (state.feedback) renderFeedback(area, state.feedback, state.count); else renderGoalsOnly(area, state.goals);
+    area.scrollTop = keep;
+    var box = document.getElementById('fb'); if (box) { box.classList.remove('flash'); void box.offsetWidth; box.classList.add('flash'); }
+    status('Your teacher checked your comments. The comments and score on the left are updated.');
+  });
 }
 
 var pollTimer = null;
@@ -716,6 +740,7 @@ function render() {
   var grid = el('div', 'grid');
   var fbBox = el('section', 'panel fb'); fbBox.id = 'fb';
   var fbArea = olTabs(fbBox);   // ★원서 에세이: 피드백 | 내 아웃라인 탭 (넓은 화면은 탭 없이 가운데 칸)
+  fbArea.setAttribute('data-fbarea', '1');   // ★선생님이 색을 바꾸면 이 칸만 다시 그림
   if (state.pending) renderPending(fbArea);
   else if (state.firstPending) renderFirstPending(fbArea);
   else if (state.feedback) renderFeedback(fbArea, state.feedback, state.count);
@@ -1228,6 +1253,8 @@ function liveSend() {
         if (fresh) { showReply(r.reply.msg); LIVE.msgRead = r.reply.t; }
       }
       if (LIVE.msgSent && LIVE.msgSent === LIVE.msgRead) LIVE.msgRead = 0;   // 읽음 전달됨
+      // ★선생님이 수업 모니터에서 코멘트 색을 바꿈 → 코멘트·점수만 다시 그림 (쓰던 글은 그대로)
+      if (r.fbAt && r.fbAt > (state.fbAt || 0)) { state.fbAt = r.fbAt; teacherRecolored(); }
       // 선생님이 답장했거나 '확인'을 눌렀으면 기다림 끝
       if (LIVE.asking && !r.ask && sentAsk === undefined && LIVE.askSend === undefined) { LIVE.asking = false; drawAsk(); }
     } else if (sentAsk !== undefined && LIVE.askSend === undefined) LIVE.askSend = sentAsk;

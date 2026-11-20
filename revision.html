@@ -174,7 +174,7 @@ var TOKEN = (new URLSearchParams(location.search).get('t') || '').replace(/[^a-z
 //   (학생이 수업 전이라 모니터에 안 보일 때 선생님이 글을 보려고 여는 용도. 학생 화면과 섞이지 않음)
 var VIEW = new URLSearchParams(location.search).get('view') === 'teacher';
 // ★이 페이지 버전 — GitHub 에 새로 올릴 때마다 바꿈. 열려 있는 옛 창은 5분마다 확인해서 새로 고치라고 알려 줌
-var PAGE_V = '2026-11-20b';
+var PAGE_V = '2026-11-20c';
 function checkNewVersion() {
   if (!window.fetch) return;
   fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (t) {
@@ -333,10 +333,16 @@ function htmlToMarkup(root) {
   var out = lines.map(function (L) {
     var t = L.runs.map(function (r) {
       var x = escTagChars(r.t);
+      if (!(r.u || r.i || r.b)) return x;
+      // ★서식 앞뒤 공백은 서식 밖으로 — '<i>Because of Winn-Dixie </i>' 같은 눈에 안 보이는 공백을
+      //   채점이 매번 '이탤릭 안에 공백'으로 지적하지 않게
+      var m = x.match(/^(\s*)([\s\S]*?)(\s*)$/);
+      if (!m[2]) return x;
+      x = m[2];
       if (r.u) x = '<u>' + x + '</u>';
       if (r.i) x = '<i>' + x + '</i>';
       if (r.b) x = '<b>' + x + '</b>';
-      return x;
+      return m[1] + x + m[3];
     }).join('');
     return L.c && t ? '<center>' + t + '</center>' : t;
   });

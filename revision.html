@@ -297,7 +297,12 @@ function htmlToMarkup(root) {
     if (tag === 'BR') { if (top) newLine(false); else if (cur && cur.runs.length) newLine(cur.c); return; }
     var cs = window.getComputedStyle(n);
     var block = /^(P|DIV|H\d|LI|BLOCKQUOTE)$/.test(tag);
-    if (block) newLine(cs.textAlign === 'center' || n.classList.contains('c') || n.getAttribute('align') === 'center');
+    // ★가운데 줄인지는 화면에 실제로 보이는 정렬로 판단 (불러올 때 붙은 class="c" 는 Left 를 눌러도 남아 있어서
+    //   예전엔 제출하면 다시 가운데로 돌아갔음). 화면 정렬을 못 읽을 때만 class/align 을 봄.
+    if (block) {
+      var ta = String(cs.textAlign || '');
+      newLine(ta ? ta === 'center' || ta === '-webkit-center' : (n.classList.contains('c') || n.getAttribute('align') === 'center'));
+    }
     var s2 = {
       b: st.b || tag === 'B' || tag === 'STRONG' || Number(cs.fontWeight) >= 600,
       i: st.i || tag === 'I' || tag === 'EM' || cs.fontStyle === 'italic',

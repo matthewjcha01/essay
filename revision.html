@@ -173,6 +173,23 @@ var TOKEN = (new URLSearchParams(location.search).get('t') || '').replace(/[^a-z
 // ★선생님 보기 모드 (주소 끝에 &view=teacher): 읽기만 — 모니터로 아무것도 보내지 않고, 제출·질문·글 고치기 없음
 //   (학생이 수업 전이라 모니터에 안 보일 때 선생님이 글을 보려고 여는 용도. 학생 화면과 섞이지 않음)
 var VIEW = new URLSearchParams(location.search).get('view') === 'teacher';
+// ★이 페이지 버전 — GitHub 에 새로 올릴 때마다 바꿈. 열려 있는 옛 창은 5분마다 확인해서 새로 고치라고 알려 줌
+var PAGE_V = '2026-11-20b';
+function checkNewVersion() {
+  if (!window.fetch) return;
+  fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (t) {
+    var m = t && t.match(/var PAGE_V = '([^']+)'/);
+    if (!m || m[1] === PAGE_V || document.getElementById('newVer')) return;
+    var b = document.createElement('div');
+    b.id = 'newVer';
+    b.style.cssText = 'position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:9999;background:#1a5490;color:#fff;' +
+      'padding:10px 16px;border-radius:10px;font:600 15px -apple-system,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer';
+    b.textContent = 'This page was updated. Click here to reload — your writing is saved.';
+    b.onclick = function () { try { var ta = document.getElementById('essay'); if (ta && !ta.readOnly) localStorage.setItem('mg-draft-' + TOKEN, ta.value); } catch (e) {} location.reload(); };
+    document.body.appendChild(b);
+  }).catch(function () {});
+}
+setInterval(checkNewVersion, 5 * 60000);
 
 // 서버 호출: GitHub 페이지에서 Apps Script로 직접 요청 (구글 계정과 무관하게 작동)
 function call(fn, args, ok, fail) {
@@ -276,7 +293,8 @@ function markupToHtml(m) {
     var c = /^<center>[\s\S]*<\/center>$/.test(line);
     if (c) line = line.slice(8, -9);
     var h = escH(line).replace(/&lt;(\/?)(b|i|u)&gt;/g, '<$1$2>');
-    return '<p' + (c ? ' class="c"' : '') + '>' + (h || '<br>') + '</p>';
+    // ★가운데는 class 대신 style 로 — 'Left' 버튼(execCommand)이 같은 자리를 덮어써서 깔끔하게 풀림
+    return '<p' + (c ? ' style="text-align: center;"' : '') + '>' + (h || '<br>') + '</p>';
   }).join('');
 }
 function htmlToMarkup(root) {

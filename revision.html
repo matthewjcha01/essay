@@ -696,6 +696,17 @@ function renderPending(box) {
 }
 
 // ★선생님이 색을 바꾼 뒤: 새 코멘트·점수를 받아 왼쪽만 다시 그림
+// ★선생님 '제출 제한 리셋' — 오늘 횟수와 간격을 새로 (서버도 같은 기준으로 셈)
+function limitReset() {
+  var lim = state.limit;
+  if (!lim || lim.off) return;
+  lim.nextAt = 0; lim.left = lim.perDay;
+  var lis = document.querySelectorAll('.rules ul li');
+  if (lis[0]) lis[0].textContent = 'Wait ' + lim.gapMin + ' minutes between submissions.';
+  if (lis[1]) lis[1].textContent = 'Up to ' + lim.perDay + ' submissions a day. Left today: ' + lim.left + '.';
+  var st = document.getElementById('status');
+  if (st && !(document.getElementById('submit') || {}).disabled) { st.className = 'status'; st.textContent = 'Mr. Cha reset your submission limit. You can submit now.'; }
+}
 function teacherRecolored() {
   call('revGetPageData', [TOKEN], function (d) {
     if (!d) return;
@@ -1284,6 +1295,8 @@ function liveSend() {
       if (LIVE.msgSent && LIVE.msgSent === LIVE.msgRead) LIVE.msgRead = 0;   // 읽음 전달됨
       // ★선생님이 수업 모니터에서 코멘트 색을 바꿈 → 코멘트·점수만 다시 그림 (쓰던 글은 그대로)
       if (r.fbAt && r.fbAt > (state.fbAt || 0)) { state.fbAt = r.fbAt; teacherRecolored(); }
+      // ★선생님이 수업 모니터에서 제출 제한을 리셋함 → 지금 바로 제출할 수 있게
+      if (r.rs && r.rs > (state.rs || 0)) { state.rs = r.rs; limitReset(); }
       // 선생님이 답장했거나 '확인'을 눌렀으면 기다림 끝
       if (LIVE.asking && !r.ask && sentAsk === undefined && LIVE.askSend === undefined) { LIVE.asking = false; drawAsk(); }
     } else if (sentAsk !== undefined && LIVE.askSend === undefined) LIVE.askSend = sentAsk;

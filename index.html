@@ -832,7 +832,7 @@
           if (r && r.ok) { OL.draft = { at: r.at, data: data }; done(true); }
           else if (r && r.relogin) { done(false); }
           else done(false);
-        }, function () { done(false); });
+        }, function (e) { done(/unknown function/.test(String(e && e.message || e)) ? null : false); });
       },
       title: first ? 'Step 1 — Outline: ' + S.과제 : 'Revise your outline',
       intro: first

@@ -997,7 +997,7 @@ function drawOutlineTab(area) {
       autosave: VIEW ? null : function (data, done) {
         callRaw('olDraft', ['', JSON.stringify({ rev: TOKEN }), JSON.stringify(data)], function (r) {
           if (r && r.ok) { OLR.draft = { at: r.at, data: data }; done(true); } else done(false);
-        }, function () { done(false); });
+        }, function (e) { done(/unknown function/.test(String(e && e.message || e)) ? null : false); });
       },
       question: state.prompt, store: 'mg-ol-' + TOKEN,
       title: state.olFirst ? 'Step 1 — Fix your outline' : OLR.data ? 'Revise your outline' : 'Make your outline',

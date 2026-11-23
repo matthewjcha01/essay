@@ -333,8 +333,10 @@
     // 기기에 남은 더 최근 글
     var resAt = opts.result && opts.result.at || 0;
     if (opts.store) {
-      try { var loc = JSON.parse(localStorage.getItem(opts.store) || 'null'); if (loc && loc.at > resAt && loc.data) data = fill(type, loc.data); } catch (e) {}
+      try { var loc = JSON.parse(localStorage.getItem(opts.store) || 'null'); if (loc && loc.at > resAt && loc.data) { data = fill(type, loc.data); resAt = loc.at; } } catch (e) {}
     }
+    // ★서버 자동 저장본 (검사 전 글) — 이 기기에 남은 것보다 새것이면 그것으로 (다른 기기·브라우저에서 이어 쓰기)
+    if (opts.draft && opts.draft.data && opts.draft.at > resAt) data = fill(type, opts.draft.data);
     var result = opts.result || null;     // { boxes: {id:{c,n}}, pass, at }
     var sent = {};                        // 마지막으로 검사받은 값 (바뀐 칸은 점선)
     var showChecks = false, confirmWarn = false, busy = false, submittedHere = false;
@@ -357,6 +359,39 @@
     function save() {
       if (opts.store) try { localStorage.setItem(opts.store, JSON.stringify({ at: Date.now(), data: data })); } catch (e) {}
       if (opts.onChange) opts.onChange(data);
+      autoSoon();
+    }
+    // ★자동 저장 (opts.autosave(data, done)) — 마지막으로 고친 뒤 3초, 계속 쓰는 중이면 최대 15초마다
+    var auto = { t: null, busy: false, again: false, first: 0, msg: '' };
+    function autoSoon() {
+      if (!opts.autosave) return;
+      clearTimeout(auto.t);
+      if (!auto.first) auto.first = Date.now();
+      setSaved('Saving…');
+      auto.t = setTimeout(autoNow, Date.now() - auto.first > 15000 ? 0 : 3000);
+    }
+    function autoNow() {
+      if (!opts.autosave) return;
+      clearTimeout(auto.t); auto.t = null;
+      if (auto.busy) { auto.again = true; return; }
+      auto.busy = true; auto.first = 0;
+      opts.autosave(JSON.parse(JSON.stringify(data)), function (ok) {
+        auto.busy = false;
+        if (ok === null) { opts.autosave = null; setSaved(''); return; }   // 서버가 아직 이 기능 없음 → 조용히 끔
+        if (auto.again) { auto.again = false; autoNow(); return; }
+        setSaved(ok ? '✓ Saved' : 'Not saved yet — keep this page open. It will try again.');
+        if (!ok) auto.t = setTimeout(autoNow, 10000);
+      });
+    }
+    function setSaved(msg) {
+      auto.msg = msg;
+      var el = root.querySelector('.mgol-sv');
+      if (el) { el.textContent = msg; el.style.color = /Not saved/.test(msg) ? 'var(--r)' : 'var(--mu)'; }
+    }
+    // 다른 화면으로 가거나 창을 닫을 때 바로 저장
+    if (opts.autosave) {
+      document.addEventListener('visibilitychange', function () { if (document.hidden && auto.t) autoNow(); });
+      window.addEventListener('pagehide', function () { if (auto.t) autoNow(); });
     }
 
     function inp(path, ph, cls, area) {
@@ -438,7 +473,8 @@
       var ch = check(type, data), L = boxList(type, data), h = '';
       var keepY = window.scrollY;
       h += '<div class="mgol-head"><h2>' + esc(opts.title || 'My outline') + '</h2><span class="sub">' +
-           (type === 'pivot' ? 'Concession → However → Reality' : type === 'compare' ? 'Compare A and B the same way in every body. Thesis is a sentence; the rest is keywords.' : 'Plan first. Thesis is a sentence; the rest is keywords.') + '</span></div>';
+           (type === 'pivot' ? 'Concession → However → Reality' : type === 'compare' ? 'Compare A and B the same way in every body. Thesis is a sentence; the rest is keywords.' : 'Plan first. Thesis is a sentence; the rest is keywords.') + '</span>' +
+           (opts.autosave ? '<span class="sub mgol-sv" style="margin-left:auto">' + esc(auto.msg) + '</span>' : '') + '</div>';
       if (opts.intro) h += '<div class="mgol-banner info">' + esc(opts.intro) + '</div>';
       if (result && result.boxes) {
         var n = counts();
@@ -575,7 +611,8 @@
     return {
       data: function () { return data; },
       text: function () { return text(type, data); },
-      setResult: function (r) { result = r; snapshotSent(data); draw(); }
+      setResult: function (r) { result = r; snapshotSent(data); draw(); },
+      flush: function () { if (auto.t) autoNow(); }
     };
   }
 
@@ -629,5 +666,5 @@
     root.innerHTML = '<div class="mgolv">' + h + '</div>';
   }
 
-  window.MGOutline = { editor: editor, view: view, text: text, check: check, blank: blank, fill: fill, boxList: boxList, typeOf: typeOf, version: 2 };
+  window.MGOutline = { editor: editor, view: view, text: text, check: check, blank: blank, fill: fill, boxList: boxList, typeOf: typeOf, version: 3 };
 })();

@@ -928,7 +928,7 @@ function render() {
 // ── ★아웃라인 (아웃라인.gs: olRevGet · olSubmit) ──
 //  원서 에세이만. 왼쪽 패널 위 탭으로 '피드백' 과 '내 아웃라인' 을 바꿔 봄.
 //  여기서 고친 아웃라인도 칸마다 색을 받음 (에세이 제출은 막지 않음).
-var OLR = { tab: 'fb', loaded: false, mode: 'view', data: null, result: null, type: 'basic', count: 0 };
+var OLR = { tab: 'fb', loaded: false, mode: 'view', data: null, result: null, type: 'basic', count: 0, draft: null };
 function callRaw(fn, args, ok, fail) {     // ol* 함수는 { result: … } 로 감싸지 않고 JSON 글을 돌려줌
   fetch(window.API_URL, { method: 'POST', body: JSON.stringify({ fn: fn, args: args }) })
     .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
@@ -939,7 +939,7 @@ function olLoad() {
   if (!window.MGOutline || !state || !state.full) return;
   if (state.olFirst && !state.done && !VIEW) { OLR.tab = 'ol'; OLR.mode = 'edit'; }   // ★아웃라인 먼저
   callRaw('olRevGet', [TOKEN], function (o) {
-    if (o && !o.err) { OLR.data = o.data; OLR.result = o.result; OLR.type = o.type || 'basic'; OLR.count = o.count || 0; }
+    if (o && !o.err) { OLR.data = o.data; OLR.result = o.result; OLR.type = o.type || 'basic'; OLR.count = o.count || 0; OLR.draft = o.draft || null; }
     OLR.loaded = true;
     var a = document.getElementById('olArea'); if (a && (OLR.tab === 'ol' || wide3())) drawOutlineTab(a);
   }, function () { OLR.loaded = true; OLR.err = true; });
@@ -992,7 +992,13 @@ function drawOutlineTab(area) {
   if (!OLR.loaded) { area.appendChild(el('div', 'hint', OLR.err ? 'Could not load your outline. Refresh the page.' : 'Loading your outline…')); return; }
   if (OLR.mode === 'edit') {
     MGOutline.editor(area, {
-      type: OLR.type, data: OLR.data, result: OLR.result, count: OLR.count, narrow: true,
+      type: OLR.type, data: OLR.data, result: OLR.result, count: OLR.count, narrow: true, draft: OLR.draft,
+      // ★검사 전에도 서버에 자동 저장 (Claude 안 부름). 보기 모드에서는 저장 안 함
+      autosave: VIEW ? null : function (data, done) {
+        callRaw('olDraft', ['', JSON.stringify({ rev: TOKEN }), JSON.stringify(data)], function (r) {
+          if (r && r.ok) { OLR.draft = { at: r.at, data: data }; done(true); } else done(false);
+        }, function () { done(false); });
+      },
       question: state.prompt, store: 'mg-ol-' + TOKEN,
       title: state.olFirst ? 'Step 1 — Fix your outline' : OLR.data ? 'Revise your outline' : 'Make your outline',
       intro: state.olFirst
@@ -1025,7 +1031,7 @@ function drawOutlineTab(area) {
   var all = OLR.result && OLR.result.pass;
   bar.appendChild(el('span', 't', !OLR.data ? 'No outline for this essay yet.' :
     all ? 'Your outline — every box is green. Keep your essay on this map.' : 'Your outline. Fix the yellow and red boxes in “Revise outline”.'));
-  var rv = el('button', null, OLR.data ? 'Revise outline' : 'Make an outline'); rv.type = 'button';
+  var rv = el('button', null, OLR.data ? 'Revise outline' : OLR.draft ? 'Continue my outline' : 'Make an outline'); rv.type = 'button';
   rv.onclick = function () { OLR.mode = 'edit'; drawOutlineTab(area); };
   if (!state.done && !VIEW) bar.appendChild(rv);   // 보기 모드에서는 아웃라인도 못 고침
   area.appendChild(bar);

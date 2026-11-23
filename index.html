@@ -6,7 +6,7 @@
 <title>Essay Writing</title>
 <base target="_top">
 <meta charset="utf-8">
-<script src="https://matthewjcha01.github.io/essay/outline.js?v=2"></script>
+<script src="https://matthewjcha01.github.io/essay/outline.js?v=3"></script>
 <style>
   :root {
     --ink: #1f2328; --muted: #6b7178; --line: #dfe2e6; --bg: #f5f6f8; --paper: #ffffff;
@@ -806,7 +806,7 @@
       if (d.ol.need) toast('The outline page could not load. You can write now — tell Mr. Cha.', 5000);
       return;
     }
-    OL = { type: d.ol.type, essay: d.ol.essay, data: d.ol.data, result: d.ol.result,
+    OL = { type: d.ol.type, essay: d.ol.essay, data: d.ol.data, result: d.ol.result, draft: d.ol.draft || null,
            passed: !!d.ol.passed, count: d.ol.count || 0, mode: 'view', ed: null };
     if (d.ol.need) outlineEdit(true); else outlineView();
   }
@@ -814,7 +814,7 @@
     document.body.classList.remove('ol-edit');
     $('olEdit').classList.add('hidden'); $('olEdit').innerHTML = '';
     $('olPanel').classList.remove('hidden');
-    $('olRevise').textContent = OL.data ? 'Revise outline' : 'Make an outline';
+    $('olRevise').textContent = OL.data ? 'Revise outline' : OL.draft ? 'Continue my outline' : 'Make an outline';
     MGOutline.view($('olView'), { type: OL.type, data: OL.data, result: OL.result, empty: 'No outline for this essay yet.' });
     OL.mode = 'view'; OL.ed = null;
     liveSoon();
@@ -824,8 +824,16 @@
     document.body.classList.add('ol-edit');
     $('olEdit').classList.remove('hidden');
     OL.ed = MGOutline.editor($('olEdit'), {
-      type: OL.type, data: OL.data, result: OL.result, count: OL.count,
+      type: OL.type, data: OL.data, result: OL.result, count: OL.count, draft: OL.draft,
       question: $('promptIn').value, store: 'mg_ol_' + S.id, mustPass: true,
+      // ★검사 전에도 서버에 자동 저장 (Claude 안 부름 — 비용 없음). 다른 기기에서 열어도 이어서 씀
+      autosave: function (data, done) {
+        call('olDraft', [TOKEN, JSON.stringify({ sub: S.id }), JSON.stringify(data)], function (r) {
+          if (r && r.ok) { OL.draft = { at: r.at, data: data }; done(true); }
+          else if (r && r.relogin) { done(false); }
+          else done(false);
+        }, function () { done(false); });
+      },
       title: first ? 'Step 1 — Outline: ' + S.과제 : 'Revise your outline',
       intro: first
         ? 'Plan your essay before you write it. Fill in each box using the guide next to it, then press "Check my outline". ' +

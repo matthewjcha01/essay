@@ -537,6 +537,38 @@
       return true;
     }
 
+    // 붙여넣기 · 끌어넣기: 이 페이지에 이미 있는 글(자기 아웃라인 칸 · 프롬프트 · 자기 글)만 허용, 바깥 글은 막음
+    function olNorm(s) { return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
+    function olOwn(raw) {
+      var c = olNorm(raw);
+      if (!c) return true;
+      var vals = [];
+      Array.prototype.forEach.call(document.querySelectorAll('input, textarea'), function (x) { vals.push(x.value || ''); });
+      var ed = document.getElementById('essay'); if (ed) vals.push(ed.innerText || '');
+      return olNorm((document.body.innerText || '') + ' ' + vals.join(' ')).indexOf(c) !== -1;
+    }
+    function olBlocked(field) {
+      if (opts.onPasteBlocked) { opts.onPasteBlocked(); return; }
+      var n = document.createElement('div');
+      n.className = 'mgol-msg';
+      n.style.cssText = 'color:#b3261e;font-weight:600;margin-top:4px';
+      n.textContent = 'Pasting from outside is turned off. Please type it yourself.';
+      var row = field.closest && field.closest('.mgol-row');
+      (row || root).appendChild(n);
+      setTimeout(function () { if (n.parentNode) n.parentNode.removeChild(n); }, 5000);
+    }
+    root.addEventListener('paste', function (e) {
+      var t = e.target; if (!t.getAttribute || !t.getAttribute('data-p')) return;
+      var cd = e.clipboardData || window.clipboardData, txt = cd ? (cd.getData('text/plain') || '') : '';
+      if (!olOwn(txt)) { e.preventDefault(); olBlocked(t); }
+    });
+    root.addEventListener('drop', function (e) {
+      var t = e.target; if (!t.getAttribute || !t.getAttribute('data-p')) return;
+      var dt = e.dataTransfer, txt = '';
+      try { txt = dt ? (dt.getData('text/plain') || '') : ''; } catch (x) {}
+      if (!olOwn(txt) || (dt && dt.files && dt.files.length)) { e.preventDefault(); olBlocked(t); }
+    });
+
     root.addEventListener('input', function (e) {
       var t = e.target, p = t.getAttribute && t.getAttribute('data-p');
       if (!p) return;

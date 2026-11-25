@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>window.API_URL = "https://script.google.com/macros/s/AKfycbyZVv25-zBxV0-CCebo2sy9l4cRX0QmpOkS1VW5pK2IYeSWTReGFhfjVoPgspVn-uhv-g/exec";</script>
 <title>Mind Grove Revision</title>
-<script src="https://matthewjcha01.github.io/essay/outline.js?v=3"></script>
+<script src="https://matthewjcha01.github.io/essay/outline.js?v=4"></script>
 <style>
   :root {
     --bg: #F6F5F1;
@@ -215,6 +215,7 @@ function el(tag, cls, text) {
   return e;
 }
 
+function normPaste(s) { return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
 function wordCount(s) {
   var m = plainText(s).trim().match(/\S+/g);
   return m ? m.length : 0;
@@ -904,13 +905,37 @@ function render() {
     LIVE.lastInput = Date.now(); liveSoon();
     actInput(ta);
   });
-  // 붙여넣기는 글자만 (다른 곳의 글꼴·색이 섞이지 않게)
+  // 붙여넣기 · 끌어넣기: 이 페이지에 이미 있는 글(자기 에세이 · 제출한 글 · 프롬프트)만 허용 — 문장 옮기기용.
+  //  바깥 글(다른 사이트 · 번역기 · AI)은 막고, 시도 횟수만 모니터에 보냄 (붙여넣으려던 내용은 저장 안 함)
+  function ownText(raw) {
+    var c = normPaste(raw);
+    if (!c) return true;
+    var page = normPaste((document.body.innerText || '') + ' ' + ta.value.replace(/<[^>]+>/g, ' '));
+    return page.indexOf(c) !== -1;
+  }
+  function pasteBlocked() {
+    LIVE.pastes++; liveSoon();
+    var st = document.getElementById('status');
+    if (st) {
+      st.className = 'status err';
+      st.textContent = 'Pasting from outside is turned off. Please type it yourself. (You can still move sentences inside your own essay.)';
+      clearTimeout(pasteBlocked.t);
+      pasteBlocked.t = setTimeout(function () { if (st.textContent.indexOf('Pasting from outside') === 0) { st.textContent = ''; st.className = 'status'; } }, 6000);
+    }
+  }
   ta.addEventListener('paste', function (e) {
-    LIVE.pastes++;
     var t = (e.clipboardData || window.clipboardData);
-    actPaste(t ? t.getData('text/plain').length : 0);
-    if (t) { e.preventDefault(); document.execCommand('insertText', false, t.getData('text/plain')); }
+    var txt = t ? (t.getData('text/plain') || '') : '';
+    e.preventDefault();
+    if (!ownText(txt)) { pasteBlocked(); return; }
+    actPaste(txt.length);
+    if (txt) document.execCommand('insertText', false, txt);     // 글자만 (다른 곳의 글꼴·색이 섞이지 않게)
     liveSoon();
+  });
+  ta.addEventListener('drop', function (e) {
+    var dt = e.dataTransfer, txt = '';
+    try { txt = dt ? (dt.getData('text/plain') || '') : ''; } catch (x) {}
+    if (!ownText(txt) || (dt && dt.files && dt.files.length)) { e.preventDefault(); pasteBlocked(); }
   });
   drawAsk();
   if (LIVE.lastReply) showReply(LIVE.lastReply, true);

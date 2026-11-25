@@ -13,7 +13,7 @@
   if (window.MGOutline) return;
 
   var CSS = [
-    '.mgol{--g:#1b7a3d;--gbg:#e6f4ea;--y:#8a6d00;--ybg:#fff4d6;--r:#b3261e;--rbg:#fce8e6;--ln:#dfe2e6;--mu:#6b7178;--ac:#1a5490;',
+    '.mgol{--g:#1b7a3d;--gbg:#e6f4ea;--y:#8a6d00;--ybg:#fff4d6;--r:#b3261e;--rbg:#fce8e6;--ln:#dfe2e6;--mu:#6b7178;--ac:#3B6D11;',
     ' font:14px/1.5 -apple-system,"Segoe UI","Apple SD Gothic Neo",sans-serif;color:#1f2328}',
     '.mgol *{box-sizing:border-box}',
     '.mgol button,.mgolv button{min-height:0;width:auto;text-transform:none;letter-spacing:0}',
@@ -76,7 +76,7 @@
     '.mgolv-pts{display:flex;gap:6px;flex-wrap:wrap}',
     '.mgolv-pt{flex:1 1 120px;background:#e7f4ef;border:1px solid #bfe3d2;border-radius:8px;padding:5px 8px}',
     '.mgolv-body{border:1px solid #e3e6ea;border-radius:10px;padding:6px;margin:0;background:#fafbfc}',
-    '.mgolv-body .bh{font-size:11px;font-weight:700;color:#1a5490;margin:0 2px 4px;text-transform:uppercase;letter-spacing:.05em}',
+    '.mgolv-body .bh{font-size:11px;font-weight:700;color:#3B6D11;margin:0 2px 4px;text-transform:uppercase;letter-spacing:.05em}',
     '.mgolv-li{display:flex;gap:6px;padding:3px 4px;border-radius:6px;align-items:flex-start}',
     '.mgolv-li .lk{flex:none;width:78px;font-size:11px;color:#6b7178;font-weight:600;padding-top:2px}',
     '.mgolv-li .lv{flex:1;min-width:0;font-family:"Times New Roman",Times,serif;font-size:14px;line-height:1.35;overflow-wrap:anywhere}',

@@ -3,19 +3,24 @@
 <head>
 <script>window.API_URL = "https://script.google.com/macros/s/AKfycbyZVv25-zBxV0-CCebo2sy9l4cRX0QmpOkS1VW5pK2IYeSWTReGFhfjVoPgspVn-uhv-g/exec";</script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Essay Writing</title>
+<title>Essay Writing · Mind Grove Edu</title>
+<link rel="icon" type="image/svg+xml" href="brand/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="brand/favicon-32.png">
+<link rel="apple-touch-icon" href="brand/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;600;700&display=swap">
 <base target="_top">
 <meta charset="utf-8">
-<script src="https://matthewjcha01.github.io/essay/outline.js?v=4"></script>
+<script src="https://matthewjcha01.github.io/essay/outline.js?v=5"></script>
 <style>
   :root {
-    --ink: #1f2328; --muted: #6b7178; --line: #dfe2e6; --bg: #f5f6f8; --paper: #ffffff;
-    --accent: #1a5490; --accent-ink: #ffffff; --warn: #b26a00; --warn-bg: #fdf3e2;
+    --ink: #222222; --muted: #555555; --line: #e5e5e5; --bg: #f7f7f5; --paper: #ffffff;
+    --accent: #3B6D11; --accent-ink: #ffffff; --warn: #b26a00; --warn-bg: #fdf3e2;
     --bad: #b3261e; --good: #1b7a3d;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--bg); color: var(--ink);
-    font: 15px/1.5 -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+    font: 15px/1.5 Inter, -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
   .hidden { display: none !important; }
   button { font: inherit; cursor: pointer; }
 
@@ -23,6 +28,15 @@
   #enter { max-width: 440px; margin: 48px auto; padding: 0 16px; }
   .card { background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 24px; }
   h1 { font-size: 20px; margin: 0 0 4px; }
+  /* Mind Grove Edu 브랜드 */
+  .mgBrand { display: flex; justify-content: center; margin: 0 0 18px; }
+  .mgBrand img { height: 44px; width: auto; display: block; }
+  #enter .card h1 { font-family: "Playfair Display", Georgia, serif; font-weight: 700; font-size: 24px; text-align: center; color: #1a1a1a; }
+  #enter .card > .sub, #enter .card .sub { text-align: left; }
+  .mgLinks { display: flex; justify-content: center; gap: 18px; flex-wrap: wrap; margin: 16px 0 0; font-size: 13px; }
+  .mgLinks a { color: var(--accent); text-decoration: none; font-weight: 600; }
+  .mgLinks a:hover { text-decoration: underline; }
+  #top .mgTree { height: 26px; width: auto; display: block; }
   .sub { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
   label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
   label small { font-weight: 400; color: var(--muted); }
@@ -184,6 +198,7 @@
 <!-- entry -->
 <div id="enter">
   <div class="card">
+    <a class="mgBrand" href="https://mindgroveedu.com" target="_blank" rel="noopener" title="Mind Grove Edu"><img src="brand/mind-grove-logo.svg" alt="Mind Grove Edu"></a>
     <h1>Essay Writing</h1>
 
     <!-- login -->
@@ -259,6 +274,10 @@
     </div>
     <div id="loadingBox" class="sub" style="text-align:center;margin:16px 0">Loading…</div>
   </div>
+  <div class="mgLinks">
+    <a href="https://classroom.google.com" target="_blank" rel="noopener">Google Classroom</a>
+    <a href="https://mindgroveedu.com" target="_blank" rel="noopener">Mind Grove Edu</a>
+  </div>
 </div>
 
 <!-- relogin (session ended while writing) -->
@@ -275,6 +294,7 @@
 <!-- writer -->
 <div id="writer" class="hidden">
   <div id="top">
+    <img class="mgTree" src="brand/mind-grove-tree.svg" alt="Mind Grove Edu">
     <span class="title" id="wTask"></span>
     <span id="olBadge">🗺 Step 1: Outline</span>
     <span class="meta" id="deadline"></span>

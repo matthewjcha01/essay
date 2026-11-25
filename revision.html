@@ -4,17 +4,22 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script>window.API_URL = "https://script.google.com/macros/s/AKfycbyZVv25-zBxV0-CCebo2sy9l4cRX0QmpOkS1VW5pK2IYeSWTReGFhfjVoPgspVn-uhv-g/exec";</script>
-<title>Mind Grove Revision</title>
-<script src="https://matthewjcha01.github.io/essay/outline.js?v=4"></script>
+<title>Revision · Mind Grove Edu</title>
+<link rel="icon" type="image/svg+xml" href="brand/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="brand/favicon-32.png">
+<link rel="apple-touch-icon" href="brand/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;600;700&display=swap">
+<script src="https://matthewjcha01.github.io/essay/outline.js?v=5"></script>
 <style>
   :root {
-    --bg: #F6F5F1;
+    --bg: #F7F7F5;
     --card: #FFFFFF;
-    --ink: #1C1C1A;
-    --muted: #6B6A64;
-    --line: #E4E2DA;
-    --accent: #2F5D50;
-    --accent-soft: #E7EFEC;
+    --ink: #222222;
+    --muted: #555555;
+    --line: #E5E5E5;
+    --accent: #3B6D11;
+    --accent-soft: #EAF3DE;
     --ok: #1E7B34;   --ok-bg: #E6F4EA;
     --mid: #9A5B00;  --mid-bg: #FFF4E0;
     --no: #B3261E;   --no-bg: #FCE8E6;
@@ -22,12 +27,14 @@
   * { box-sizing: border-box; }
   html, body { margin: 0; background: var(--bg); color: var(--ink); }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", Roboto, sans-serif;
+    font-family: Inter, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", Roboto, sans-serif;
     font-size: 16px; line-height: 1.55;
   }
   .wrap { max-width: 1280px; margin: 0 auto; padding: 14px 16px; }
   header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
-  .brand { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+  .brand { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); font-weight: 700;
+    display: flex; align-items: center; gap: 8px; }
+  .brand img { height: 22px; width: auto; display: block; }
   h1 { font-size: 22px; margin: 0; line-height: 1.2; }
   .meta { color: var(--muted); font-size: 14px; }
   .prompt { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin-bottom: 12px; }
@@ -174,7 +181,7 @@ var TOKEN = (new URLSearchParams(location.search).get('t') || '').replace(/[^a-z
 //   (학생이 수업 전이라 모니터에 안 보일 때 선생님이 글을 보려고 여는 용도. 학생 화면과 섞이지 않음)
 var VIEW = new URLSearchParams(location.search).get('view') === 'teacher';
 // ★이 페이지 버전 — GitHub 에 새로 올릴 때마다 바꿈. 열려 있는 옛 창은 5분마다 확인해서 새로 고치라고 알려 줌
-var PAGE_V = '2026-11-20c';
+var PAGE_V = '2026-11-25a';
 function checkNewVersion() {
   if (!window.fetch) return;
   fetch(location.pathname + '?v=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (t) {
@@ -762,7 +769,10 @@ function render() {
 
   var head = el('header');
   var left = el('div');
-  left.appendChild(el('div', 'brand', 'Mind Grove · Revision'));
+  var brandEl = el('div', 'brand', 'Mind Grove Edu · Revision');
+  var brandImg = document.createElement('img'); brandImg.src = 'brand/mind-grove-tree.svg'; brandImg.alt = '';
+  brandEl.insertBefore(brandImg, brandEl.firstChild);
+  left.appendChild(brandEl);
   left.appendChild(el('h1', null, state.name));
   head.appendChild(left);
   var right = el('div');

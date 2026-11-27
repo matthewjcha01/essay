@@ -161,13 +161,13 @@
   // ── 칸 옆 가이드 (Write / e.g. / Check) ──
   var G = {
     question: { w: 'Copy the essay question you are answering.', e: 'How does Ada find a place where she belongs?', c: '' },
-    thesis: { w: 'One full sentence — strong, clear, universal (no character names).', e: 'When people refuse the life others have chosen for them, they find where they truly belong.', c: 'Could anyone find a hole in it? Does it answer every part of the question?' },
+    thesis: { w: 'One full sentence — strong, clear, universal (no character names).', e: 'When people refuse the life others have chosen for them, they find where they truly belong.', c: 'Does it answer every part of the question? Could you defend it if someone disagreed?' },
     point: { w: '2–4 words for each piece of evidence, in the same order as your body paragraphs. Just a taste.', e: '① no place at home &nbsp;② teaching herself to walk', thin: '① home ② walking', c: 'One point for each body paragraph?' },
     topic: { w: 'who → strong verb → what. The verb is the most important word.', e: 'Ada → refuses → Mam’s locked room', thin: 'Ada → is → sad', c: 'Does your verb make your claim feel certain?' },
     example: { w: 'The page number + the first few words of the quote. Only ONE moment — the best one.', e: 'p.15 “You can’t leave… bombs or no”', thin: 'p.15', c: 'Is this the one best moment for your topic?' },
     gap: { w: '2–3 words on each side of the arrow (what changed). Then one “so what” line that ends at your topic.', e: 'other kids leave safely → Ada stays under bombs / so what: no place in her family', thin: 'bad → worse', c: 'Is there a clear change? Does “so what” lead to your topic?' },
     connection: { w: 'The exact words from your thesis that this paragraph proves. Character names are OK here.', e: '→ “refuse the life others have chosen”', thin: '→ thesis', c: 'Did you copy words from your thesis?' },
-    counter: { w: 'The other side’s idea in 3–5 words, and its weak spot. Pick an idea that sounds believable.', e: 'Ada should obey Mam / weak spot: Mam never cared for her', thin: 'some people disagree', c: 'Is it believable — but with a weak spot you can attack?' },
+    counter: { w: 'The other side’s idea in 3–5 words, and its weak spot. Pick an idea a thoughtful reader might really believe.', e: 'Ada should obey Mam / weak spot: Mam never cared for her', thin: 'some people disagree', c: 'Would a thoughtful reader really believe it? Can you find its weak spot in the book?' },
     rebut: { w: 'What we lose if we believe them. Strike back hard.', e: 'we lose the chance to belong anywhere', c: 'Does it hit the weak spot?' },
     significance: { w: 'ONE lesson in 3–6 words. Share it, don’t force it. No “I”.', e: 'belonging begins with one brave choice', thin: 'be brave', c: 'Is it a lesson about people — not a rule, not only about the character?' },
     concession: { w: 'One full sentence: what SEEMS true at first. Use “appears to” or “seems to” — later you will turn it around.', e: 'At first, the Rebellion appears to give the animals the free, fair life they dreamed of.', c: 'Does it sound true now — but only “seems”?' },
@@ -181,7 +181,7 @@
   };
   // 비교/대조 칸의 가이드 (같은 칸 이름이어도 내용이 다른 것)
   var GC = {
-    thesis: { w: 'One full sentence — what the DIFFERENCE between A and B shows about people and life. Not just “they are different.” No character names.', e: 'Someone who has always been loved can trust a new home at once, but someone who has been hurt must learn to trust step by step.', c: 'Does it say what the difference SHOWS? Could anyone find a hole in it?' },
+    thesis: { w: 'One full sentence — what the DIFFERENCE between A and B shows about people and life. Not just “they are different.” No character names.', e: 'Someone who has always been loved can trust a new home at once, but someone who has been hurt must learn to trust step by step.', c: 'Does it say what the difference SHOWS? Could you defend it if someone disagreed?' },
     point: { w: '2–4 words for each way you will compare A and B — the same way for both — in the same order as your body paragraphs.', e: '① trusting a new home &nbsp;② asking for help', thin: '① different ② same', c: 'One way of comparing for each body paragraph?' },
     topic: { w: 'who → strong verb → what, showing A and B side by side.', e: 'Jamie, unlike Ada → trusts → Susan from the first night', thin: 'Ada and Jamie → are → different', c: 'Does it name both sides? Does your verb make the claim feel certain?' }
   };
